@@ -1,0 +1,187 @@
+#!/bin/bash
+set -e
+
+ssl_dir="/opt/ssl"
+php_dir="/opt/ldap_user_manager"
+
+env_file_replace() {
+  for env_file in $(env|grep _FILE=); do
+    read -a env <<< "$(echo "$env_file" | sed 's/\(.*\)_FILE=\(.*\)/\1 \2/')"
+    if [ -s "${env[1]}" ]; then
+      echo Setting "${env[0]}" from "${env[1]}"
+      export "${env[0]}"="$(cat "${env[1]}")"
+      else echo "${env[1]} does not exist or is empty. Leaving ${env[0]} unset"
+    fi
+  done
+}
+
+if [ ! "$SERVER_HOSTNAME" ]; then export SERVER_HOSTNAME="ldapusermanager.org"; fi
+if [ ! "$SERVER_PATH" ]; then
+  export SERVER_PATH="/";
+  apache_alias=""
+else
+  apache_alias="Alias $SERVER_PATH $php_dir"
+fi
+
+#If LDAP_TLS_CACERT is set then write it out as a file
+#and set up the LDAP client conf to use it.
+
+if [ "$LDAP_TLS_CACERT" ]; then
+  echo "$LDAP_TLS_CACERT" >/opt/ca.crt
+  mkdir -p /etc/ldap  
+  sed -i "s/TLS_CACERT.*/TLS_CACERT \/opt\/ca.crt/" /etc/ldap/ldap.conf
+fi
+
+if [ "${NO_HTTPS,,}" == "true" ]; then
+
+  cat <<EoHTTPC >/etc/apache2/sites-enabled/lum.conf
+
+<VirtualHost *:${SERVER_PORT:-80}>
+
+ ServerName $SERVER_HOSTNAME
+ DocumentRoot $php_dir
+ $apache_alias
+ DirectoryIndex index.php index.html
+
+ <Directory $php_dir>
+   Require all granted
+ </Directory>
+
+</VirtualHost>
+EoHTTPC
+
+
+  echo "Listen ${SERVER_PORT:-80}" > /etc/apache2/ports.conf
+
+else
+
+  ########################
+  #If there aren't any SSL certs then create a CA and then CA-signed certificate
+
+  if [ ! -f "${ssl_dir}/${SERVER_CERT_FILENAME:-server.crt}" ] && [ ! -f "${ssl_dir}/${SERVER_KEY_FILENAME:-server.key}" ]; then
+
+    mkdir -p $ssl_dir
+    confout="${ssl_dir}/conf"
+    keyout="${ssl_dir}/server.key"
+    certout="${ssl_dir}/server.crt"
+    cakey="${ssl_dir}/.ca.key"
+    cacert="${ssl_dir}/.ca.crt"
+    serialfile="${ssl_dir}/.serial"
+
+    echo "Generating CA key"
+    openssl genrsa -out $cakey 2048
+    if [ $? -ne 0 ]; then exit 1 ; fi
+
+    echo "Generating CA certificate"
+    openssl req \
+            -x509 \
+            -new \
+            -nodes \
+            -subj "/C=GB/ST=GB/L=GB/O=CA/OU=CA/CN=Wheelybird" \
+            -key $cakey \
+            -sha256 \
+            -days 7300 \
+            -out $cacert
+    if [ $? -ne 0 ]; then exit 1 ; fi
+
+    echo "Generating openssl configuration"
+
+    cat <<EoCertConf >$confout
+subjectAltName = DNS:${SERVER_HOSTNAME},IP:127.0.0.1
+extendedKeyUsage = serverAuth
+EoCertConf
+
+    echo "Generating server key..."
+    openssl genrsa -out $keyout 2048
+    if [ $? -ne 0 ]; then exit 1 ; fi
+
+    echo "Generating server signing request..."
+    openssl req \
+                 -subj "/CN=${SERVER_HOSTNAME}" \
+                 -sha256 \
+                 -new \
+                 -key $keyout \
+                 -out /tmp/server.csr
+    if [ $? -ne 0 ]; then exit 1 ; fi
+
+    echo "Generating server cert..."
+    openssl x509 \
+                  -req \
+                  -days 7300 \
+                  -sha256 \
+                  -in /tmp/server.csr \
+                  -CA $cacert \
+                  -CAkey $cakey \
+                  -CAcreateserial \
+                  -CAserial $serialfile \
+                  -out $certout \
+                  -extfile $confout
+    if [ $? -ne 0 ]; then exit 1 ; fi
+
+  fi
+
+
+  ########################
+  #Create Apache config
+
+  if [ -f "${ssl_dir}/${CA_CERT_FILENAME}" ]; then ssl_chain="SSLCertificateChainFile ${ssl_dir}/${CA_CERT_FILENAME}"; fi
+
+  echo  > /etc/apache2/sites-enabled/lum.conf
+  echo  > /etc/apache2/ports.conf
+
+  if [ ! "$SERVER_PORT" ]; then
+
+    echo "Listen 80" > /etc/apache2/ports.conf
+
+    cat <<EoHTTPrd >/etc/apache2/sites-enabled/lum.conf
+
+<VirtualHost *:80>
+
+ RewriteEngine On
+ RewriteRule ^/?(.*) https://%{SERVER_NAME}/\$1 [R,L]
+
+</VirtualHost>
+
+EoHTTPrd
+
+  fi
+
+  echo "Listen ${SERVER_PORT:-443}" >> /etc/apache2/ports.conf
+  
+  cat <<EoHTTPSC >>/etc/apache2/sites-enabled/lum.conf
+
+<VirtualHost _default_:${SERVER_PORT:-443}>
+
+ ServerName $SERVER_HOSTNAME
+
+ DocumentRoot $php_dir
+ $apache_alias
+ DirectoryIndex index.php index.html
+
+ <Directory $php_dir>
+   Require all granted
+ </Directory>
+
+ SSLEngine On
+ SSLCertificateFile ${ssl_dir}/${SERVER_CERT_FILENAME:-server.crt}
+ SSLCertificateKeyFile ${ssl_dir}/${SERVER_KEY_FILENAME:-server.key}
+ $ssl_chain
+
+</VirtualHost>
+EoHTTPSC
+
+fi
+
+########################
+#If <env_var>_FILE is set, read and export env_var from the referenced file's contents
+env_file_replace
+
+########################
+#Run Apache
+
+# first arg is `-f` or `--some-option`
+if [ "${1#-}" != "$1" ]; then
+        set -- apache2-foreground "$@"
+fi
+
+exec "$@"

@@ -1,0 +1,5 @@
+username,firstname,lastname,email,password,groups
+admin,Admin,User,admin@mycompany.local,admin,admins
+alice,Alice,Smith,alice@mycompany.local,alice123,developers
+bob,Bob,Johnson,bob@mycompany.local,bob123,admins
+charlie,Charlie,Brown,charlie@mycompany.local,charlie123,developers;admins
