@@ -55,32 +55,12 @@ ldapkeycloakpoc/
 - Python 3 (for local LDIF generation/testing)
 - LDAP client tools (optional, for testing): `brew install openldap` on macOS
 
-### Manual Build (Optional)
-
-The docker-compose configuration will automatically build the LDAP User Manager image on first run. However, you can build it manually if needed:
-
-```bash
-# Build just the web UI container
-docker-compose build ldap-webui
-
-# Or build all containers
-docker-compose build
-```
-
-**When to manually build:**
-- After modifying the Dockerfile (e.g., ARM compatibility changes)
-- After updating the LDAP User Manager source code
-- If you want to pre-build before first run
-- Troubleshooting build issues
-
 ## Quick Start
 
 1. **Start the entire LDAP ecosystem:**
    ```bash
    ./start.sh
    ```
-   
-   **Note**: On first run, Docker will automatically build the LDAP User Manager image from the included Dockerfile. This may take a few minutes to download dependencies and build the PHP/Apache container.
 
 2. **Access the services:**
    - **LDAP Server**: `ldap://localhost:389`
@@ -445,24 +425,9 @@ If you want to update or modify the LDAP User Manager:
    git add ldap-user-manager/
    ```
 
-3. **Fix ARM/Mac compatibility (if needed)**:
-   If you're on Apple Silicon (M1/M2) or ARM architecture, you need to modify the Dockerfile:
-   ```bash
-   # Edit ldap-user-manager/Dockerfile
-   # Find this line:
-   docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu && \
-   
-   # Change it to:
-   docker-php-ext-configure ldap --with-libdir=lib/aarch64-linux-gnu && \
-   ```
-   
-   This configures the PHP LDAP extension to use the correct library path for ARM architecture.
-
-4. **Rebuild the Docker image**:
+3. **Rebuild the Docker image**:
    ```bash
    docker-compose build ldap-webui
-   # Or restart with automatic rebuild
-   docker-compose up -d --build
    ```
 
 #### Why Remove Git References?
