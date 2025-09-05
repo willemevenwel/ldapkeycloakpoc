@@ -27,12 +27,12 @@ EOF
 echo "Setting permissions..."
 chown -R ldap:ldap /var/lib/openldap
 
-echo "Running CSV to LDIF conversion..."
-if [ -f /opt/import/users.csv ]; then
-  cd /opt/import && python3 csv_to_ldif.py
-  echo "CSV conversion completed"
+echo "Running CSV to LDIF conversion (admins only)..."
+if [ -f /opt/import/admins.csv ]; then
+  cd /opt/import && python3 csv_to_ldif.py admins.csv
+  echo "Admin CSV conversion completed"
 else
-  echo "No CSV file found"
+  echo "No admins CSV file found"
 fi
 
 echo "Starting LDAP server..."
@@ -42,12 +42,12 @@ SLAPD_PID=$!
 echo "Waiting for LDAP server to start..."
 sleep 5
 
-echo "Importing users..."
-if [ -f /opt/output/users.ldif ]; then
-  ldapadd -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /opt/output/users.ldif
-  echo "Import completed successfully!"
+echo "Importing admin users only..."
+if [ -f /opt/output/admins_only.ldif ]; then
+  ldapadd -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /opt/output/admins_only.ldif
+  echo "Admin import completed successfully!"
 else
-  echo "No LDIF file found to import"
+  echo "No admin LDIF file found to import"
 fi
 
 echo "LDAP server is ready!"

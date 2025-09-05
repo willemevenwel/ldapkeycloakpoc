@@ -7,6 +7,7 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Admin-Only Startup](#admin-only-startup)
 - [LDAP Configuration](#ldap-configuration)
 - [User and Group Management](#user-and-group-management)
 - [Web UI Management](#web-ui-management)
@@ -21,6 +22,7 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 - 🔒 **OpenLDAP Server**: Running on Alpine Linux with MDB backend
 - 🌐 **Web UI**: LDAP User Manager for browser-based administration
 - 📊 **Automated CSV Import**: Convert CSV files to LDIF and import automatically
+- 🎛️ **Multi-Mode Loading**: Admin-only startup with manual additional user loading
 - 🔄 **Hot Reload**: Restart containers to apply CSV changes
 - 🔐 **SHA Password Hashing**: Secure password storage
 - 👥 **Flexible Group Management**: Support for both POSIX and standard LDAP groups
@@ -94,6 +96,43 @@ docker-compose build
    ```bash
    ./stop.sh
    ```
+
+## Admin-Only Startup
+
+The system is configured to load **only admin users** on startup for better control and security.
+
+### Startup Behavior
+- **What gets loaded**: Admin users from `data/admins.csv` 
+- **Result**: LDAP with complete admin user accounts for initial setup
+
+### Loading Additional Users
+After startup, manually load additional users:
+```bash
+./load_additional_users.sh
+```
+
+This will:
+- Load all users from `data/users.csv`
+- Create additional groups as needed
+- Update existing group memberships
+
+### CSV Files
+- **`data/admins.csv`**: Complete admin user data (loaded on startup)
+- **`data/users.csv`**: Additional user data (loaded manually)
+
+### CSV to LDIF Converter
+The `csv_to_ldif.py` script auto-detects based on filename:
+
+```bash
+# Process admin users (auto-detected from filename)
+python3 csv_to_ldif.py data/admins.csv
+
+# Process additional users (auto-detected from filename)
+python3 csv_to_ldif.py data/users.csv
+
+# Show help
+python3 csv_to_ldif.py help
+```
 
 ## LDAP Configuration
 

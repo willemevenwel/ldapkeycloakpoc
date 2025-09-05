@@ -1,2 +1,2 @@
-username,gidNumber
-admin,5000
+username,firstname,lastname,email,password,groups,gidNumber
+admin,Admin,User,admin@mycompany.local,admin,admins,5000
