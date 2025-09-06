@@ -2,7 +2,7 @@ version: '3.8'
 services:
   ldap:
     image: alpine:3.18
-    container_name: my-openldap
+    container_name: ldap
     command: /opt/import/start_ldap.sh
     ports:
       - "389:389"
@@ -13,10 +13,10 @@ services:
       - ./data/admins.csv:/opt/import/admins.csv:ro
       - ./ldap/start_ldap.sh:/opt/import/start_ldap.sh:ro
 
-  ldap-webui:
+  ldap-manager:
     build: ./ldap-user-manager
     image: my-ldap-user-manager:latest
-    container_name: ldap-user-manager
+    container_name: ldap-manager
     environment:
       - LDAP_URI=ldap://ldap:389
       - LDAP_BASE_DN=dc=mycompany,dc=local
@@ -27,7 +27,18 @@ services:
       - LDAP_ADMIN_BIND_DN=cn=admin,dc=mycompany,dc=local
       - LDAP_ADMIN_BIND_PWD=admin
       - NO_HTTPS=true
+      - ENFORCE_SAFE_SYSTEM_NAMES=FALSE
     ports:
       - "8080:80"
     depends_on:
       - ldap
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    command: start-dev
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    ports:
+      - "8090:8080"

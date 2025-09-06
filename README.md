@@ -1,12 +1,13 @@
 # LDAP Keycloak POC
 
-A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF conversion, data import, and web-based user management interface.
+A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF conversion, data import, Keycloak integration, and web-based user management interface.
 
 ## Table of Contents
 - [Features](#features)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Keycloak Integration](#keycloak-integration)
 - [Admin-Only Startup](#admin-only-startup)
 - [LDAP Configuration](#ldap-configuration)
 - [User and Group Management](#user-and-group-management)
@@ -20,6 +21,7 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 ## Features
 
 - 🔒 **OpenLDAP Server**: Running on Alpine Linux with MDB backend
+- 🔐 **Keycloak Identity Provider**: Enterprise-grade identity and access management
 - 🌐 **Web UI**: LDAP User Manager for browser-based administration
 - 📊 **Automated CSV Import**: Convert CSV files to LDIF and import automatically
 - 🎛️ **Multi-Mode Loading**: Admin-only startup with manual additional user loading
@@ -27,6 +29,7 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 - 🔐 **SHA Password Hashing**: Secure password storage
 - 👥 **Flexible Group Management**: Support for both POSIX and standard LDAP groups
 - 🚀 **Development Ready**: Complete setup for testing and development
+- 🏢 **User Federation**: Automated LDAP provider setup for Keycloak realms
 
 ## Project Structure
 
@@ -37,6 +40,10 @@ ldapkeycloakpoc/
 │   ├── users.csv               # User data and group memberships
 │   └── admins.csv              # Admin user definitions
 ├── csv_to_ldif.py              # CSV to LDIF conversion script
+├── keycloak/                   # Keycloak management scripts
+│   ├── create_realm.sh         # Create new Keycloak realms
+│   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
+│   └── debug_realm_ldap.sh     # Debug realm and LDAP provider status
 ├── ldap/
 │   └── start_ldap.sh           # LDAP container startup script
 ├── ldap-user-manager/          # Web UI source code (from external repo)
@@ -48,6 +55,7 @@ ldapkeycloakpoc/
 │   └── admins.ldif             # Generated admin group data
 ├── start.sh                    # Main startup script
 ├── stop.sh                     # Stop all services script
+├── load_additional_users.sh    # Load additional users after startup
 └── README.md                   # This file
 ```
 
@@ -63,7 +71,7 @@ The docker-compose configuration will automatically build the LDAP User Manager 
 
 ```bash
 # Build just the web UI container
-docker-compose build ldap-webui
+docker-compose build ldap-manager
 
 # Or build all containers
 docker-compose build
@@ -86,16 +94,150 @@ docker-compose build
 
 2. **Access the services:**
    - **LDAP Server**: `ldap://localhost:389`
-   - **Web UI**: http://localhost:8080
+   - **LDAP Web UI**: http://localhost:8080
+   - **Keycloak**: http://localhost:8090
 
-3. **Login to Web UI:**
+3. **Login to LDAP Web UI:**
    - **Username**: `admin`
    - **Password**: `admin`
 
-4. **Stop everything:**
+4. **Login to Keycloak:**
+   - **Username**: `admin`
+   - **Password**: `admin`
+
+5. **Stop everything:**
    ```bash
    ./stop.sh
    ```
+
+## Keycloak Integration
+
+This POC includes Keycloak for enterprise identity and access management with LDAP user federation.
+
+### Keycloak Access
+- **URL**: http://localhost:8090
+- **Admin Console**: http://localhost:8090/admin/
+- **Master Admin**: `admin` / `admin`
+
+### Realm Management
+
+#### Creating a New Realm
+```bash
+# Create a new realm (e.g., "company")
+./keycloak/create_realm.sh company
+```
+
+This creates:
+- New realm named "company"
+- Admin user: `admin-company` / `admin-company`
+- Proper realm configuration for LDAP integration
+
+#### Configuring LDAP User Federation
+```bash
+# Add LDAP provider to a realm
+./keycloak/add_ldap_provider_for_keycloak.sh company
+```
+
+This automatically configures:
+- LDAP connection to the local OpenLDAP server
+- User import from `ou=users,dc=mycompany,dc=local`
+- Group mapping from `ou=groups,dc=mycompany,dc=local`
+- Read-only federation (users managed in LDAP)
+- POSIX group mapping for group membership
+
+#### LDAP Provider Configuration Details
+
+The script configures the following LDAP settings:
+- **Connection URL**: `ldap://ldap:389`
+- **Users DN**: `ou=users,dc=mycompany,dc=local`
+- **Bind DN**: `cn=admin,dc=mycompany,dc=local`
+- **Bind Credential**: `admin`
+- **User Object Classes**: `inetOrgPerson`
+- **Username Attribute**: `uid`
+- **UUID Attribute**: `entryUUID`
+- **Edit Mode**: `READ_ONLY`
+- **Import Enabled**: `true`
+- **Sync Registrations**: `true`
+
+### Keycloak Debugging
+
+#### Check Realm and LDAP Provider Status
+```bash
+# Debug a specific realm
+./keycloak/debug_realm_ldap.sh company
+```
+
+Output example:
+```
+🔍 Checking realm: company
+✅ Realm company exists and is accessible
+✅ Found 1 LDAP provider(s) in realm company:
+{
+  "id": "abc123def456",
+  "name": "ldap-provider",
+  "enabled": "true"
+}
+```
+
+#### Manual Verification
+Access the Keycloak Admin Console:
+1. Go to http://localhost:8090/admin/
+2. Login with master admin (`admin` / `admin`)
+3. Select your realm from the dropdown
+4. Navigate to **User Federation**
+5. Verify the LDAP provider appears and is enabled
+
+#### Common Keycloak URLs
+```bash
+# Realm-specific URLs (replace 'company' with your realm name)
+# Realm public endpoint
+http://localhost:8090/realms/company
+
+# Realm admin console
+http://localhost:8090/admin/company/console/
+
+# User federation management
+http://localhost:8090/admin/company/console/#/company/user-federation
+
+# Users management
+http://localhost:8090/admin/company/console/#/company/users
+```
+
+### Troubleshooting Keycloak Integration
+
+#### LDAP Provider Not Visible in UI
+If the LDAP provider doesn't appear in the Keycloak Admin Console:
+1. **Check provider exists via API**:
+   ```bash
+   ./keycloak/debug_realm_ldap.sh <realm-name>
+   ```
+2. **Clear browser cache** (Ctrl+F5 or Cmd+Shift+R)
+3. **Try incognito/private browsing mode**
+4. **Verify correct realm** in the Keycloak admin console
+
+#### Connection Issues
+If Keycloak can't connect to LDAP:
+1. **Verify LDAP is running**:
+   ```bash
+   docker ps | grep ldap
+   docker logs ldap
+   ```
+2. **Test LDAP connectivity**:
+   ```bash
+   docker exec keycloak ping ldap
+   ```
+3. **Check LDAP data**:
+   ```bash
+   ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=users,dc=mycompany,dc=local"
+   ```
+
+#### User Import Issues
+If users don't sync from LDAP:
+1. **Trigger manual sync** in Keycloak Admin Console:
+   - Go to User Federation → ldap-provider
+   - Click "Sync all users"
+2. **Check LDAP user format** matches expected schema
+3. **Verify user DN structure** in LDAP matches Keycloak configuration
 
 ## Admin-Only Startup
 
@@ -171,10 +313,9 @@ dc=mycompany,dc=local
 #### `data/users.csv`
 ```csv
 username,firstname,lastname,email,password,groups
-admin,Admin,User,admin@mycompany.local,admin,admins
 alice,Alice,Smith,alice@mycompany.local,alice123,developers
-bob,Bob,Johnson,bob@mycompany.local,bob123,admins
-charlie,Charlie,Brown,charlie@mycompany.local,charlie123,developers;admins
+bob,Bob,Johnson,bob@mycompany.local,bob123,developers
+charlie,Charlie,Brown,charlie@mycompany.local,charlie123,developers
 ```
 
 **Field Descriptions:**
@@ -187,11 +328,13 @@ charlie,Charlie,Brown,charlie@mycompany.local,charlie123,developers;admins
 
 #### `data/admins.csv`
 ```csv
-username,gidNumber
-admin,5000
+username,firstname,lastname,email,password,groups,gidNumber
+admin,Admin,User,admin@mycompany.local,admin,admins,5000
 ```
 
 This file defines which users should be in the special `admins` group for web UI administration privileges.
+
+**Note on gidNumber**: The value 5000 is the Group ID for the "admins" group in LDAP. Starting at 5000 avoids conflicts with system groups (0-999) and reserved ranges (1000-4999), following Unix/Linux conventions. Additional groups get sequential IDs (5001, 5002, etc.).
 
 ### User Object Classes and Attributes
 
@@ -241,6 +384,28 @@ The LDAP User Manager expects:
 4. **User Object Class**: Users should be `inetOrgPerson` objects
 5. **Group Object Class**: Groups should be `posixGroup` objects
 
+### Group Name Validation
+
+The LDAP User Manager includes system name validation that can restrict group and user names to specific patterns. This is controlled by the `ENFORCE_SAFE_SYSTEM_NAMES` environment variable:
+
+```yaml
+environment:
+  - ENFORCE_SAFE_SYSTEM_NAMES=FALSE    # Disable strict name validation
+```
+
+**When validation is enabled (TRUE):**
+- Group and user names must match the regex: `^[a-z][a-zA-Z0-9\._-]{3,32}$`
+- Must start with lowercase letter
+- Length between 3-32 characters
+- Only allows alphanumeric, dot, underscore, and hyphen
+
+**When validation is disabled (FALSE):**
+- More flexible naming conventions allowed
+- Useful for existing LDAP data with different naming patterns
+- Recommended for POC/development environments
+
+**Note**: This setting is disabled in the current configuration to allow group names like `cs1`, `cs2`, `cs3` to work properly with the web interface.
+
 ### Login Credentials
 
 Available users (username/password):
@@ -248,6 +413,30 @@ Available users (username/password):
 - `alice/alice123` (Regular user)
 - `bob/bob123` (Admin privileges)
 - `charlie/charlie123` (Admin privileges)
+
+## Container Access
+
+You can access the running containers directly using docker exec for debugging and administration:
+
+```bash
+# Access the LDAP container (Alpine Linux with shell)
+docker exec -it ldap sh
+
+# Access the LDAP Manager container (Ubuntu with bash)
+docker exec -it ldap-manager bash
+
+# Run specific commands without entering the container
+docker exec ldap ps aux                    # Check processes in LDAP container
+docker exec ldap-manager ps aux           # Check processes in LDAP Manager container
+
+# Check LDAP service status and data
+docker exec ldap netstat -tlnp            # Check what ports are listening
+docker exec ldap ldapsearch -x -b "dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin
+
+# Check Apache and PHP status in LDAP Manager
+docker exec ldap-manager service apache2 status
+docker exec ldap-manager php -v
+```
 
 ## Debugging and Troubleshooting
 
@@ -261,13 +450,91 @@ docker ps
 docker ps -a
 
 # View LDAP server logs
-docker logs my-openldap
+docker logs ldap
 
-# View Web UI logs
-docker logs ldap-user-manager
+# View LDAP Web UI logs
+docker logs ldap-manager
+
+# View Keycloak logs
+docker logs keycloak
 
 # Follow logs in real-time
-docker logs -f my-openldap
+docker logs -f ldap
+docker logs -f keycloak
+
+# Get detailed container information
+docker inspect ldap
+docker inspect ldap-manager
+docker inspect keycloak
+```
+
+### Interactive Container Debugging
+
+```bash
+# Debug LDAP service inside container
+docker exec -it ldap sh -c "ps aux | grep slapd"
+docker exec -it ldap sh -c "netstat -tlnp"
+
+# Debug LDAP web service inside container  
+docker exec -it ldap-manager bash -c "ps aux | grep apache"
+docker exec -it ldap-manager bash -c "tail -f /var/log/apache2/error.log"
+
+# Debug Keycloak service inside container
+docker exec -it keycloak bash -c "ps aux | grep java"
+docker exec -it keycloak bash -c "netstat -tlnp"
+
+# Test LDAP from inside containers
+docker exec ldap ldapsearch -x -b "dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin
+docker exec keycloak curl -s http://ldap:389 || echo "LDAP connection failed"
+```
+
+### Keycloak-Specific Debugging
+
+```bash
+# Check Keycloak startup logs
+docker logs keycloak | grep -E "(started|error|exception)"
+
+# Test Keycloak admin API
+curl -s "http://localhost:8090/admin/master/console/" | grep -o "<title>.*</title>"
+
+# Check Keycloak realms
+curl -s "http://localhost:8090/realms/master" | jq '.realm' 2>/dev/null || echo "Master realm not responding"
+
+# Debug specific realm (replace 'company' with your realm)
+./keycloak/debug_realm_ldap.sh company
+
+# Manual API check for LDAP providers in a realm
+REALM="company"
+TOKEN=$(curl -s -X POST "http://localhost:8090/realms/${REALM}/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "username=admin-${REALM}" \
+    -d "password=admin-${REALM}" \
+    -d "grant_type=password" \
+    -d "client_id=admin-cli" | jq -r '.access_token')
+
+curl -s -X GET "http://localhost:8090/admin/realms/${REALM}/components?type=org.keycloak.storage.UserStorageProvider" \
+    -H "Authorization: Bearer ${TOKEN}" | jq '.'
+```
+
+### Quick Debug Commands Reference
+
+```bash
+# Most common debugging commands
+docker ps                                    # Check if containers are running
+docker logs ldap                            # Check LDAP container logs
+docker logs ldap-manager                    # Check LDAP web UI logs
+docker logs keycloak                        # Check Keycloak logs
+docker exec -it ldap sh                     # Enter LDAP container
+docker exec -it ldap-manager bash           # Enter LDAP web UI container
+docker exec -it keycloak bash               # Enter Keycloak container
+
+# Quick health checks
+docker exec ldap ps aux | grep slapd        # Check if LDAP daemon is running
+docker exec ldap-manager ps aux | grep apache  # Check if Apache is running
+docker exec keycloak ps aux | grep java     # Check if Keycloak is running
+
+# Keycloak realm and LDAP debugging
+./keycloak/debug_realm_ldap.sh <realm-name> # Check realm and LDAP provider status
 ```
 
 ### LDAP Server Testing
@@ -293,19 +560,49 @@ ldapsearch -x -H ldap://localhost:389 -D "uid=admin,ou=users,dc=mycompany,dc=loc
 
 #### "Failed to bind as cn=admin,dc=mycompany,dc=local"
 - **Cause**: LDAP server not running or wrong credentials
-- **Solution**: Check `docker logs my-openldap` for errors, ensure container is running
+- **Solution**: Check `docker logs ldap` for errors, ensure container is running
 
-#### "The username and/or password are unrecognised" (Web UI)
+#### "The username and/or password are unrecognised" (LDAP Web UI)
 - **Cause**: Wrong OU configuration or user doesn't exist
 - **Solution**: Verify `LDAP_USER_OU=users` is set and user exists in `ou=users`
 
+#### Keycloak "Connection refused" or not accessible
+- **Cause**: Keycloak container not running or port conflict
+- **Solution**: 
+  ```bash
+  docker ps | grep keycloak              # Check if running
+  docker logs keycloak                   # Check startup logs
+  netstat -tlnp | grep 8090              # Check if port is in use
+  ```
+
+#### LDAP provider not visible in Keycloak UI
+- **Cause**: Provider created with wrong realm ID or UI cache
+- **Solution**: 
+  ```bash
+  ./keycloak/debug_realm_ldap.sh <realm-name>  # Verify provider exists
+  # Clear browser cache and try incognito mode
+  # Check Keycloak logs for any federation errors
+  ```
+
+#### Keycloak can't connect to LDAP
+- **Cause**: Network connectivity or LDAP credentials
+- **Solution**:
+  ```bash
+  docker exec keycloak ping ldap         # Test network connectivity
+  docker logs ldap | grep -i error       # Check LDAP errors
+  # Verify LDAP bind credentials in Keycloak configuration
+  ```
+
+#### Users not syncing from LDAP to Keycloak
+- **Cause**: LDAP schema mismatch or sync not triggered
+- **Solution**:
+  - Manually trigger sync in Keycloak Admin Console
+  - Verify user object classes match (inetOrgPerson)
+  - Check LDAP user DN structure matches Keycloak expectations
+
 #### Container exits immediately
 - **Cause**: Script error in startup
-- **Solution**: Check `docker logs my-openldap` for specific errors
-
-#### "Invalid syntax" errors during LDAP import
-- **Cause**: Malformed LDIF or unsupported object class combinations
-- **Solution**: Check generated LDIF files in `ldif/` directory
+- **Solution**: Check `docker logs <container-name>` for specific errors
 
 ### Manual CSV to LDIF Conversion
 

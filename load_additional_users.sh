@@ -1,24 +1,35 @@
 #!/bin/bash
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BLACK='\033[0;30m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+NC='\033[0m' # No Color
+
 # load_additional_users.sh
 # Script to manually load additional users into LDAP after startup
 
-echo "🔄 Loading additional users into LDAP..."
+echo -e "🔄 Loading additional users into ${CYAN}LDAP${NC}..."
 
 # Check if containers are running
-if ! docker ps | grep -q "my-openldap"; then
-    echo "❌ Error: LDAP container 'my-openldap' is not running."
+if ! docker ps | grep -q "ldap"; then
+    echo -e "❌ Error: ${CYAN}LDAP${NC} container 'ldap' is not running."
     echo "Please start the system first with: ./start.sh"
     exit 1
 fi
 
-if ! docker ps | grep -q "ldap-user-manager"; then
-    echo "❌ Error: LDAP User Manager container 'ldap-user-manager' is not running."
+if ! docker ps | grep -q "ldap-manager"; then
+    echo -e "❌ Error: ${WHITE}LDAP User Manager${NC} container 'ldap-manager' is not running."
     echo "Please start the system first with: ./start.sh"
     exit 1
 fi
 
-echo "✅ LDAP containers are running"
+echo -e "✅ ${CYAN}LDAP${NC} containers are running"
 
 # Generate additional users LDIF
 echo "📝 Generating LDIF for additional users..."
@@ -48,11 +59,11 @@ head -20 ldif/additional_users.ldif
 echo "========================================"
 
 # Copy LDIF files into container and import
-echo "📥 Copying LDIF files to LDAP container..."
-docker cp ldif/additional_users.ldif my-openldap:/tmp/additional_users.ldif
+echo -e "📥 Copying LDIF files to ${CYAN}LDAP${NC} container..."
+docker cp ldif/additional_users.ldif ldap:/tmp/additional_users.ldif
 
 if [ -f "ldif/additional_users_modify.ldif" ]; then
-    docker cp ldif/additional_users_modify.ldif my-openldap:/tmp/additional_users_modify.ldif
+    docker cp ldif/additional_users_modify.ldif ldap:/tmp/additional_users_modify.ldif
 fi
 
 if [ $? -ne 0 ]; then
@@ -60,22 +71,22 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "🔄 Adding new users and groups to LDAP..."
+echo -e "🔄 Adding new users and groups to ${CYAN}LDAP${NC}..."
 
 # Add new users and groups (ignore errors for existing groups)
-docker exec my-openldap ldapadd -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /tmp/additional_users.ldif -c
+docker exec ldap ldapadd -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /tmp/additional_users.ldif -c
 
 # Update existing group memberships if modify file exists
 if [ -f "ldif/additional_users_modify.ldif" ]; then
     echo "👥 Updating existing group memberships..."
-    docker exec my-openldap ldapmodify -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /tmp/additional_users_modify.ldif -c
+    docker exec ldap ldapmodify -x -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /tmp/additional_users_modify.ldif -c
 fi
 
 if [ $? -eq 0 ]; then
     echo "✅ Additional users imported successfully!"
     echo ""
-    echo "🌐 You can now access the updated LDAP:"
-    echo "   - LDAP Server: ldap://localhost:389"
+    echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"
+    echo -e "   - ${CYAN}LDAP${NC} Server: ldap://localhost:389"
     echo "   - Web UI: http://localhost:8080"
     echo "   - Login: admin/admin"
     echo ""
@@ -83,12 +94,12 @@ if [ $? -eq 0 ]; then
     echo "   ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=mycompany,dc=local' -w admin -b 'ou=users,dc=mycompany,dc=local' '(objectClass=inetOrgPerson)'"
 else
     echo "⚠️  Import completed with some warnings (this is normal for group updates)"
-    echo "✅ Additional users should now be available in LDAP"
+    echo -e "✅ Additional users should now be available in ${CYAN}LDAP${NC}"
 fi
 
 # Clean up
-docker exec my-openldap rm -f /tmp/additional_users.ldif
+docker exec ldap rm -f /tmp/additional_users.ldif
 if [ -f "ldif/additional_users_modify.ldif" ]; then
-    docker exec my-openldap rm -f /tmp/additional_users_modify.ldif
+    docker exec ldap rm -f /tmp/additional_users_modify.ldif
 fi
 echo "🧹 Cleanup completed"

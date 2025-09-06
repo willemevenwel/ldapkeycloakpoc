@@ -165,6 +165,7 @@ def write_groups(ldif, groups, group_members_uids, gid_base=5000):
         gid = gid_base + idx
         
         ldif.write(f"dn: {group_dn}\n")
+        ldif.write("objectClass: top\n")
         ldif.write("objectClass: posixGroup\n")
         ldif.write(f"cn: {group_name}\n")
         ldif.write(f"gidNumber: {gid}\n")
@@ -216,7 +217,8 @@ with open(input_csv) as f, open(output_ldif, "w") as ldif:
 # For additional mode, also create a modify file for existing groups
 if mode == "additional" and groups:
     with open(modify_ldif, 'w') as modify_file:
-        for group_name, member_uids in group_members_uids.items():
+        for group_name, member_dns in groups.items():
+            member_uids = group_members_uids[group_name]
             group_dn = f"cn={group_name},{GROUPS_OU}"
             modify_file.write(f"# Add new members to existing group {group_name}\n")
             modify_file.write(f"dn: {group_dn}\n")
