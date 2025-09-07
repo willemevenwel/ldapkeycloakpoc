@@ -13,5 +13,5 @@ NC='\033[0m' # No Color
 echo "${RED}Stopping all services and removing containers (keeping images and volumes)...${NC}"
 docker-compose down --remove-orphans
 
-echo "${GREEN}All services have been stopped and containers removed.${NC}"
+echo "${YELLOW}All services have been stopped and containers removed.${NC}"
 echo "${YELLOW}${CYAN}LDAP${NC} server is now offline.${NC}"

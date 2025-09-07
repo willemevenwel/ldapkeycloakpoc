@@ -404,7 +404,7 @@ environment:
 - Useful for existing LDAP data with different naming patterns
 - Recommended for POC/development environments
 
-**Note**: This setting is disabled in the current configuration to allow group names like `cs1`, `cs2`, `cs3` to work properly with the web interface.
+**Note**: This setting is disabled in the current configuration to allow group names like `ds1`, `ds2`, `ds3` to work properly with the web interface.
 
 ### Login Credentials
 

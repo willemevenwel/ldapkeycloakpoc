@@ -84,7 +84,7 @@ check_ldap_exists() {
     EXISTING_LDAP=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?type=org.keycloak.storage.UserStorageProvider" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" | \
-        jq -r '.[] | select(.name=="ldap-provider") | .id')
+        jq -r '.[] | select(.name=="ldap-provider-'${REALM}'") | .id')
     
     if [ -n "$EXISTING_LDAP" ] && [ "$EXISTING_LDAP" != "null" ]; then
         echo -e "${YELLOW}⚠️  ${CYAN}LDAP${NC} provider already exists (ID: ${EXISTING_LDAP})${NC}"
@@ -117,7 +117,7 @@ create_ldap_provider() {
     
     LDAP_CONFIG=$(cat <<EOF
 {
-    "name": "ldap-provider",
+    "name": "ldap-provider-${REALM}",
     "providerId": "ldap",
     "providerType": "org.keycloak.storage.UserStorageProvider",
     "parentId": "${REALM_ID}",
@@ -191,9 +191,12 @@ EOF
 create_group_mapper() {
     echo -e "${YELLOW}👥 Creating ${CYAN}LDAP${NC} group mapper...${NC}"
     
+    # Define which groups to sync (you can modify this list)
+    GROUPS_TO_SYNC="admins|developers|ds1|ds2|ds3|user"  # Sync all groups
+    
     GROUP_MAPPER_CONFIG=$(cat <<EOF
 {
-    "name": "group-mapper",
+    "name": "group-mapper-${REALM}",
     "providerId": "group-ldap-mapper",
     "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper",
     "parentId": "${LDAP_ID}",
@@ -201,12 +204,12 @@ create_group_mapper() {
         "groups.dn": ["ou=groups,dc=mycompany,dc=local"],
         "group.name.ldap.attribute": ["cn"],
         "group.object.classes": ["posixGroup"],
-        "preserve.group.inheritance": ["true"],
+        "preserve.group.inheritance": ["false"],
         "ignore.missing.groups": ["false"],
         "membership.ldap.attribute": ["memberUid"],
         "membership.attribute.type": ["UID"],
         "membership.user.ldap.attribute": ["uid"],
-        "groups.ldap.filter": [],
+        "groups.ldap.filter": ["(|(cn=admins)(cn=developers)(cn=ds1)(cn=ds2)(cn=ds3)(cn=user))"],
         "mode": ["READ_ONLY"],
         "user.roles.retrieve.strategy": ["LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"],
         "mapped.group.attributes": [],
@@ -216,23 +219,20 @@ create_group_mapper() {
 EOF
 )
 
-    curl -s -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/components" \
+    HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/components" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
-        -d "${GROUP_MAPPER_CONFIG}" > /dev/null
+        -d "${GROUP_MAPPER_CONFIG}" \
+        -o /tmp/group_mapper_response.json)
     
-    echo -e "${GREEN}✅ Created ${CYAN}LDAP${NC} group mapper${NC}"
-}
-
-# Function to sync users
-sync_users() {
-    echo -e "${YELLOW}🔄 Syncing users from ${CYAN}LDAP${NC}...${NC}"
+    if [ "$HTTP_STATUS" != "201" ]; then
+        echo -e "${RED}❌ Failed to create ${CYAN}LDAP${NC} group mapper (HTTP $HTTP_STATUS)${NC}"
+        RESPONSE=$(cat /tmp/group_mapper_response.json)
+        echo -e "${RED}Response: $RESPONSE${NC}"
+        exit 1
+    fi
     
-    curl -s -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/user-storage/${LDAP_ID}/sync?action=triggerFullSync" \
-        -H "Authorization: Bearer ${TOKEN}" \
-        -H "Content-Type: application/json" > /dev/null
-    
-    echo -e "${GREEN}✅ User sync triggered${NC}"
+    echo -e "${GREEN}✅ Created ${CYAN}LDAP${NC} group mapper (syncing: ${GROUPS_TO_SYNC})${NC}"
 }
 
 # Function to verify LDAP provider was created
@@ -274,7 +274,6 @@ get_realm_id
 check_ldap_exists
 create_ldap_provider
 create_group_mapper
-sync_users
 verify_ldap_provider
 
 echo -e "${GREEN}🎉 ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} configuration completed successfully!${NC}"
@@ -284,13 +283,14 @@ echo -e "${YELLOW}🔍 ${CYAN}LDAP${NC} provider created with ID: ${LDAP_ID}${NC
 
 echo -e "${YELLOW}📋 Configuration Summary:${NC}"
 echo -e "   • Realm: ${REALM}"
-echo -e "   • ${CYAN}LDAP${NC} Provider     : ldap-provider (ID: ${LDAP_ID})"
+echo -e "   • ${CYAN}LDAP${NC} Provider     : ldap-provider-${REALM} (ID: ${LDAP_ID})"
 echo -e "   • ${CYAN}LDAP${NC} Provider url : ${BLUE}${KEYCLOAK_URL}/admin/master/console/#/mirai/user-federation/ldap/${LDAP_ID}${NC}"
 echo -e "   • ${CYAN}LDAP${NC} Server       : ${CYAN}ldap://ldap:389${NC}"
 echo -e "   • Users DN       : ou=users,dc=mycompany,dc=local"
-echo -e "   • Groups DN.     : ou=groups,dc=mycompany,dc=local"
-echo -e "   • Edit Mode.     : READ_ONLY"
-echo -e "   • Group Mapper   : Enabled for posixGroup"
+echo -e "   • Groups DN      : ou=groups,dc=mycompany,dc=local"
+echo -e "   • Groups Filter  : Syncing all groups: admins, developers, ds1, ds2, ds3, user"
+echo -e "   • Edit Mode      : READ_ONLY"
+echo -e "   • Group Mapper   : group-mapper-${REALM} (all groups)"
 echo -e "   • Authentication : $([ "$USE_MASTER_ADMIN" = "true" ] && echo "Master Admin" || echo "Realm Admin")"
 echo ""
 echo -e "${GREEN}🌐 Access URLs:${NC}"
@@ -306,10 +306,13 @@ else
 fi
 echo ""
 echo -e "${YELLOW}💡 The ${CYAN}LDAP${YELLOW} provider should now appear in:${NC}"
-echo -e "${YELLOW}   User Federation → ldap-provider${NC}"
+echo -e "${YELLOW}   User Federation → ldap-provider-${REALM}${NC}"
 echo -e "${YELLOW}   If it doesn't appear immediately, try:${NC}"
 echo -e "${YELLOW}   1. Refreshing the page (Ctrl+F5)${NC}"
 echo -e "${YELLOW}   2. Clearing browser cache${NC}"
 echo -e "${YELLOW}   3. Logging out and back in to ${MAGENTA}Keycloak${NC}${NC}"
 echo ""
 echo -e "${YELLOW}🔧 To debug further, run: ${WHITE}./debug_ldap_provider.sh ${REALM}${NC}"
+echo ""
+echo -e "${CYAN}➡️  Next step: Run sync to import users and groups:${NC}"
+echo -e "${CYAN}   ./sync_ldap.sh ${REALM}${NC}"

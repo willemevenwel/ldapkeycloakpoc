@@ -2,10 +2,10 @@ username,firstname,lastname,email,password,groups
 alice,Alice,Smith,alice@mycompany.local,alice123,developers
 bob,Bob,Johnson,bob@mycompany.local,bob123,developers
 charlie,Charlie,Brown,charlie@mycompany.local,charlie123,developers
-willem,Willem,Evenwel,willem@evenwel.com,willem,cs1
-louis,Louis,Fouche,louis@fouche.com,louis,cs2
-jack,Jack,De Kock,jack@dekock.com,jack,cs3
-razvan,Razvan,Hutanu,razvan@hutanu.com,razvan,cs2
-andre,Andre,Van Coppenhagen,andre@coppenhagen.com,andre,cs3
-jp,JP,Du Toit,jp@dutoit.com,jp,cs1
+willem,Willem,Evenwel,willem@evenwel.com,willem,ds1
+louis,Louis,Fouche,louis@fouche.com,louis,ds2
+jack,Jack,De Kock,jack@dekock.com,jack,ds3
+razvan,Razvan,Hutanu,razvan@hutanu.com,razvan,ds2
+andre,Andre,Van Coppenhagen,andre@coppenhagen.com,andre,ds3
+jp,JP,Du Toit,jp@dutoit.com,jp,ds1
 anwar,Anwar,Tadmiri,anwar@tadmiri.com,anwar,user
