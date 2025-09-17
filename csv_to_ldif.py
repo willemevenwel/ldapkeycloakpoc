@@ -104,17 +104,21 @@ else:
             mode = "additional"
             print(f"Auto-detected mode: 'additional' (default fallback)")
 
-# Set output file based on detected mode
-if mode == "admins":
-    output_ldif = os.path.join(output_dir, "admins_only.ldif")
-elif mode == "additional":
-    output_ldif = os.path.join(output_dir, "additional_users.ldif")
-    modify_ldif = os.path.join(output_dir, "additional_users_modify.ldif")
-else:  # all
-    output_ldif = os.path.join(output_dir, "users.ldif")
+
+
+# Always generate three files: admins_only.ldif, users.ldif, group_assign.ldif
+admins_ldif = os.path.join(output_dir, "admins_only.ldif")
+users_ldif = os.path.join(output_dir, "users.ldif")
+group_assign_ldif = os.path.join(output_dir, "group_assign.ldif")
+
+# Remove old LDIF files if they exist
+for f in [admins_ldif, users_ldif, group_assign_ldif]:
+    if os.path.exists(f):
+        print(f"Deleting old LDIF file: {f}")
+        os.remove(f)
 
 print(f"Using CSV file: {input_csv}")
-print(f"Output file: {output_ldif}")
+print(f"Output files: {admins_ldif}, {users_ldif}, {group_assign_ldif}")
 
 def sha_password(password):
     sha = hashlib.sha1(password.encode('utf-8')).digest()
@@ -173,65 +177,67 @@ def write_groups(ldif, groups, group_members_uids, gid_base=5000):
             ldif.write(f"memberUid: {member_uid}\n")
         ldif.write("\n")
 
-# Main processing logic
+
+# --- New multi-file generation logic ---
 groups = {}
 group_members_uids = {}
-processed_users = []
+admin_groups = {}
+admin_group_members_uids = {}
+user_groups = {}
+user_group_members_uids = {}
+admins_processed = []
+users_processed = []
 
-with open(input_csv) as f, open(output_ldif, "w") as ldif:
+with open(input_csv) as f:
     reader = csv.DictReader(f)
-    
-    # Write base structure only for 'all' and 'admins' modes
-    if mode in ["all", "admins"]:
-        write_base_structure(ldif)
-    
-    # Process users - with new structure, no filtering needed
     for row in reader:
         username = row["username"]
         firstname = row["firstname"]
         lastname = row["lastname"]
         email = row["email"]
         password = sha_password(row["password"])
-        
-        print(f"Processing user: {username}")
-        processed_users.append(username)
-        
-        # Write user entry
-        write_user(ldif, username, firstname, lastname, email, password)
-        
-        # Track group membership
+        is_admin = username in admin_usernames
+        # Track group membership for all
         for group in row["groups"].split(";"):
             group = group.strip()
             groups.setdefault(group, []).append(f"uid={username},{USERS_OU}")
             group_members_uids.setdefault(group, []).append(username)
-    
-    # Write groups based on mode
-    if mode == "all":
-        write_groups(ldif, groups, group_members_uids, 5000)
-    elif mode == "admins":
-        write_groups(ldif, groups, group_members_uids, 5000)
-    elif mode == "additional":
-        # For additional users, create groups starting from GID 6000
-        write_groups(ldif, groups, group_members_uids, 6000)
+            if is_admin:
+                admin_groups.setdefault(group, []).append(f"uid={username},{USERS_OU}")
+                admin_group_members_uids.setdefault(group, []).append(username)
+            else:
+                user_groups.setdefault(group, []).append(f"uid={username},{USERS_OU}")
+                user_group_members_uids.setdefault(group, []).append(username)
+        if is_admin:
+            admins_processed.append((username, firstname, lastname, email, password))
+        else:
+            users_processed.append((username, firstname, lastname, email, password))
 
-# For additional mode, also create a modify file for existing groups
-if mode == "additional" and groups:
-    with open(modify_ldif, 'w') as modify_file:
-        for group_name, member_dns in groups.items():
-            member_uids = group_members_uids[group_name]
-            group_dn = f"cn={group_name},{GROUPS_OU}"
-            modify_file.write(f"# Add new members to existing group {group_name}\n")
-            modify_file.write(f"dn: {group_dn}\n")
-            modify_file.write("changetype: modify\n")
-            modify_file.write("add: memberUid\n")
-            for member_uid in member_uids:
-                modify_file.write(f"memberUid: {member_uid}\n")
-            modify_file.write("\n")
-    print(f"Modify LDIF created: {modify_ldif}")
+# 1. Write admins_only.ldif
+with open(admins_ldif, "w") as ldif:
+    write_base_structure(ldif)
+    for username, firstname, lastname, email, password in admins_processed:
+        write_user(ldif, username, firstname, lastname, email, password)
+    write_groups(ldif, admin_groups, admin_group_members_uids, 5000)
 
-if processed_users:
-    print(f"LDIF generated successfully in '{mode}' mode!")
-    print(f"Processed users: {', '.join(processed_users)}")
-    print(f"Output file: {output_ldif}")
-else:
-    print(f"No users to process in '{mode}' mode")
+# 2. Write users.ldif
+with open(users_ldif, "w") as ldif:
+    for username, firstname, lastname, email, password in users_processed:
+        write_user(ldif, username, firstname, lastname, email, password)
+    write_groups(ldif, user_groups, user_group_members_uids, 6000)
+
+# 3. Write group_assign.ldif (modify operations for all groups)
+with open(group_assign_ldif, 'w') as modify_file:
+    for group_name, member_uids in group_members_uids.items():
+        group_dn = f"cn={group_name},{GROUPS_OU}"
+        modify_file.write(f"# Add new members to existing group {group_name}\n")
+        modify_file.write(f"dn: {group_dn}\n")
+        modify_file.write("changetype: modify\n")
+        modify_file.write("add: memberUid\n")
+        for member_uid in member_uids:
+            modify_file.write(f"memberUid: {member_uid}\n")
+        modify_file.write("\n")
+
+print(f"Admins processed: {[u[0] for u in admins_processed]}")
+print(f"Users processed: {[u[0] for u in users_processed]}")
+print(f"LDIF files generated: {admins_ldif}, {users_ldif}, {group_assign_ldif}")

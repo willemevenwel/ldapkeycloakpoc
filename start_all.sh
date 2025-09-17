@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -8,6 +9,9 @@ BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Save the starting directory
+START_DIR="$(pwd)"
 
 # Check if realm name parameter is provided
 CHECK_STEPS=false
@@ -97,6 +101,7 @@ check_success
 echo -e "${GREEN}✅ Additional users loaded successfully${NC}"
 echo ""
 
+
 # Step 3: Create Keycloak realm
 confirm_step "About to create Keycloak realm '${REALM_NAME}' with admin user"
 echo -e "${GREEN}🔄 Step 3: Creating Keycloak realm '${REALM_NAME}'...${NC}"
@@ -122,6 +127,9 @@ check_success
 echo -e "${GREEN}✅ Users and groups synced successfully${NC}"
 echo ""
 
+# Return to the original directory before final prompt
+cd "$START_DIR"
+
 # Final summary
 echo -e "${GREEN}🎉 Complete setup finished successfully!${NC}"
 echo ""
@@ -134,9 +142,9 @@ echo -e "${YELLOW}   • Group mapper 'group-mapper-${REALM_NAME}' configured${N
 echo -e "${YELLOW}   • Users and groups synced from LDAP to Keycloak${NC}"
 echo ""
 echo -e "${GREEN}🌐 Access your setup:${NC}"
-echo -e "${GREEN}   • Keycloak Admin: ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
-echo -e "${GREEN}   • Realm URL: ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
-echo -e "${GREEN}   • LDAP Manager: ${BLUE}http://localhost:8091${NC}"
+echo -e "${GREEN}   • Keycloak Admin : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
+echo -e "${GREEN}   • Realm URL      : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
+echo -e "${GREEN}   • LDAP Manager   : ${BLUE}http://localhost:8091${NC}"
 echo ""
 echo -e "${GREEN}🔑 Admin credentials:${NC}"
 echo -e "${GREEN}   • Keycloak Realm Admin: admin-${REALM_NAME} / admin-${REALM_NAME}${NC}"
@@ -144,6 +152,7 @@ echo -e "${GREEN}   • Keycloak Master Admin: admin / admin${NC}"
 echo -e "${GREEN}   • LDAP Manager: cn=admin,dc=mycompany,dc=local / admin${NC}"
 echo ""
 echo -e "${YELLOW}💡 Expected groups synced: admins, developers, ds1, ds2, ds3, user${NC}"
+
 echo -e "${YELLOW}💡 Expected users synced: admin, alice, bob, charlie, willem, jp, louis, razvan, jack, andre, anwar${NC}"
 echo ""
 echo -e "${CYAN}🔄 To sync again later, run: ${WHITE}cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
@@ -152,3 +161,17 @@ echo -e "${YELLOW}📖 Usage examples:${NC}"
 echo -e "${YELLOW}   ./start_all.sh my-realm${NC}                    # Full automated setup"
 echo -e "${YELLOW}   ./start_all.sh my-realm --check-steps${NC}      # Interactive mode with confirmations"
 echo -e "${YELLOW}   ./start_all.sh --check-steps${NC}               # Interactive mode, will prompt for realm name"
+
+# --- Highlighted message and prompt for loading additional users ---
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}⚠️  If you want to load additional users and group assignments into LDAP,${NC}"
+echo -e "${YELLOW}   you must run: ${WHITE}./load_additional_users.sh${NC}"
+echo -e "${YELLOW}   This will import users.ldif and group_assign.ldif into LDAP.${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -en "${CYAN}Do you want to run ./load_additional_users.sh now? (Y/n): ${NC}"
+read -r run_additional
+if [ "${run_additional}" = "Y" ] || [ "${run_additional}" = "y" ]; then
+    "$START_DIR"/load_additional_users.sh
+else
+    echo -e "${YELLOW}Skipping additional users import. You can run it manually later with:${NC} ./load_additional_users.sh"
+fi

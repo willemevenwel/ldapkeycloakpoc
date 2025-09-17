@@ -64,6 +64,7 @@ wait_for_ldap
 echo -e "✅ ${CYAN}LDAP${NC} containers are running"
 
 # Generate additional users LDIF
+
 echo "📝 Generating LDIF for additional users..."
 python3 csv_to_ldif.py data/users.csv
 
@@ -73,13 +74,13 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check if there are users to import
-if [ ! -f "ldif/additional_users.ldif" ]; then
-    echo "❌ Error: additional_users.ldif file not found"
+if [ ! -f "ldif/users.ldif" ]; then
+    echo "❌ Error: users.ldif file not found"
     exit 1
 fi
 
 # Check if the file has actual content (not just comments)
-if ! grep -q "^dn:" ldif/additional_users.ldif; then
+if ! grep -q "^dn:" ldif/users.ldif; then
     echo "ℹ️  No additional users to import (only admin users found in CSV)"
     echo "All users are already loaded as admins."
     exit 0
@@ -87,7 +88,7 @@ fi
 
 echo "📋 Additional users LDIF content preview:"
 echo "========================================"
-head -20 ldif/additional_users.ldif
+head -20 ldif/users.ldif
 echo "========================================"
 
 # Copy LDIF files into container and import
@@ -112,10 +113,10 @@ copy_with_retry() {
     return 1
 }
 
-copy_with_retry "ldif/additional_users.ldif" || exit 1
+copy_with_retry "ldif/users.ldif" || exit 1
 
-if [ -f "ldif/additional_users_modify.ldif" ]; then
-    copy_with_retry "ldif/additional_users_modify.ldif" || exit 1
+if [ -f "ldif/group_assign.ldif" ]; then
+    copy_with_retry "ldif/group_assign.ldif" || exit 1
 fi
 
 echo -e "🔄 Adding new users and groups to ${CYAN}LDAP${NC}..."
@@ -149,52 +150,13 @@ ldap_exec_safe() {
     esac
 }
 
-# Function for commands that might need retry (like connection issues)
-ldap_exec_with_retry() {
-    local command_args="$@"
-    local max_attempts=3
-    local attempt=1
-    
-    while [ $attempt -le $max_attempts ]; do
-        echo -e "Attempt $attempt: docker exec ldap $command_args"
-        docker exec ldap $command_args
-        local exit_code=$?
-        
-        # Success or expected LDAP codes
-        if [ $exit_code -eq 0 ] || [ $exit_code -eq 20 ] || [ $exit_code -eq 68 ]; then
-            if [ $exit_code -eq 20 ]; then
-                echo -e "ℹ️  Some values already exist (this is normal)"
-            elif [ $exit_code -eq 68 ]; then
-                echo -e "ℹ️  Some entries already exist (this is normal)"
-            fi
-            return 0
-        fi
-        
-        # Only retry on actual connection/server errors (codes like 32, 49, 52, etc.)
-        if [ $exit_code -eq 32 ] || [ $exit_code -eq 49 ] || [ $exit_code -eq 52 ] || [ $exit_code -eq 53 ]; then
-            if [ $attempt -lt $max_attempts ]; then
-                echo -e "⚠️  LDAP connection/server error (code $exit_code), retrying in 3 seconds..."
-                sleep 3
-            fi
-        else
-            echo -e "❌ LDAP command failed with exit code $exit_code (not retryable)"
-            return $exit_code
-        fi
-        
-        attempt=$((attempt + 1))
-    done
-    
-    echo -e "⚠️  LDAP command failed after $max_attempts attempts with exit code $exit_code"
-    return $exit_code
-}
-
 # Add new users and groups (ignore errors for existing entries)
-ldap_exec_safe ldapadd -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/additional_users.ldif -c
+ldap_exec_safe ldapadd -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/users.ldif -c
 
 # Update existing group memberships if modify file exists
-if [ -f "ldif/additional_users_modify.ldif" ]; then
+if [ -f "ldif/group_assign.ldif" ]; then
     echo "👥 Updating existing group memberships..."
-    ldap_exec_safe ldapmodify -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/additional_users_modify.ldif -c
+    ldap_exec_safe ldapmodify -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/group_assign.ldif -c
 fi
 
 # Verify the import was successful
@@ -216,9 +178,9 @@ fi
 
 echo ""
 echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"
-echo -e "   - ${CYAN}LDAP${NC} Server: ldap://localhost:389"
-echo "   - Web UI: http://localhost:8080"
-echo "   - Login: admin/admin"
+echo -e "   - ${CYAN}LDAP${NC} Server : ${BLUE}ldap://localhost:389${NC}"
+echo -e "   - Web UI      : ${BLUE}http://localhost:8080${NC}"
+echo "   - Login       : admin/admin"
 echo ""
 echo "📊 To verify the import, you can run:"
 echo "   ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=mycompany,dc=local' -w admin -b 'ou=users,dc=mycompany,dc=local' '(objectClass=inetOrgPerson)'"
