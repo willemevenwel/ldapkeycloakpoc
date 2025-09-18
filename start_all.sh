@@ -50,10 +50,11 @@ if [ "$CHECK_STEPS" = true ]; then
 fi
 echo -e "${YELLOW}📋 This will execute the following steps:${NC}"
 echo -e "${YELLOW}   1. Start all services (Docker containers)${NC}"
-echo -e "${YELLOW}   2. Load additional users into LDAP${NC}"
-echo -e "${YELLOW}   3. Create Keycloak realm: ${REALM_NAME}${NC}"
-echo -e "${YELLOW}   4. Add LDAP provider with group mapping${NC}"
-echo -e "${YELLOW}   5. Sync users and groups from LDAP${NC}"
+echo -e "${YELLOW}   2. Create Keycloak realm: ${REALM_NAME}${NC}"
+echo -e "${YELLOW}   3. Add LDAP provider${NC}"
+echo -e "${YELLOW}   4. Create role mapper for LDAP groups${NC}"
+echo -e "${YELLOW}   5. Sync users and roles from LDAP${NC}"
+
 echo ""
 
 # Function to check if previous command succeeded
@@ -93,38 +94,37 @@ echo -e "${YELLOW}⏳ Waiting for services to fully initialize...${NC}"
 sleep 5
 echo ""
 
-# Step 2: Load additional users
-confirm_step "About to load additional users and groups into LDAP from CSV files"
-echo -e "${GREEN}🔄 Step 2: Loading additional users into LDAP...${NC}"
-./load_additional_users.sh
-check_success
-echo -e "${GREEN}✅ Additional users loaded successfully${NC}"
-echo ""
-
-
-# Step 3: Create Keycloak realm
-confirm_step "About to create Keycloak realm '${REALM_NAME}' with admin user"
-echo -e "${GREEN}🔄 Step 3: Creating Keycloak realm '${REALM_NAME}'...${NC}"
+# Step 2: Create Keycloak realm
+confirm_step "About to create Keycloak realm '${REALM_NAME}' with admin user and anticipated roles"
+echo -e "${GREEN}🔄 Step 2: Creating Keycloak realm '${REALM_NAME}'...${NC}"
 cd keycloak
 ./create_realm.sh "${REALM_NAME}"
 check_success
 echo -e "${GREEN}✅ Realm '${REALM_NAME}' created successfully${NC}"
 echo ""
 
-# Step 4: Add LDAP provider with group mapping
-confirm_step "About to create LDAP provider 'ldap-provider-${REALM_NAME}' and group mapper"
-echo -e "${GREEN}🔄 Step 4: Adding LDAP provider with group mapping...${NC}"
+# Step 3: Add LDAP provider
+confirm_step "About to create LDAP provider 'ldap-provider-${REALM_NAME}'"
+echo -e "${GREEN}🔄 Step 3: Adding LDAP provider...${NC}"
 ./add_ldap_provider_for_keycloak.sh "${REALM_NAME}"
 check_success
-echo -e "${GREEN}✅ LDAP provider and group mapping added successfully${NC}"
+echo -e "${GREEN}✅ LDAP provider added successfully${NC}"
 echo ""
 
-# Step 5: Sync users and groups from LDAP
-confirm_step "About to sync all users and groups from LDAP to Keycloak"
-echo -e "${GREEN}🔄 Step 5: Syncing users and groups from LDAP...${NC}"
+# Step 4: Create role mapper
+confirm_step "About to create role mapper 'role-mapper-${REALM_NAME}' for LDAP groups"
+echo -e "${GREEN}🔄 Step 4: Creating role mapper for LDAP groups...${NC}"
+./update_role_mapper.sh "${REALM_NAME}"
+check_success
+echo -e "${GREEN}✅ Role mapper created successfully${NC}"
+echo ""
+
+# Step 5: Sync users and roles from LDAP
+confirm_step "About to sync all users and roles from LDAP to Keycloak"
+echo -e "${GREEN}🔄 Step 5: Syncing users and roles from LDAP...${NC}"
 ./sync_ldap.sh "${REALM_NAME}"
 check_success
-echo -e "${GREEN}✅ Users and groups synced successfully${NC}"
+echo -e "${GREEN}✅ Users and roles synced successfully${NC}"
 echo ""
 
 # Return to the original directory before final prompt
@@ -138,20 +138,21 @@ echo -e "${YELLOW}   • All Docker services are running${NC}"
 echo -e "${YELLOW}   • LDAP server populated with users and groups${NC}"
 echo -e "${YELLOW}   • Keycloak realm '${REALM_NAME}' created${NC}"
 echo -e "${YELLOW}   • LDAP provider 'ldap-provider-${REALM_NAME}' configured${NC}"
-echo -e "${YELLOW}   • Group mapper 'group-mapper-${REALM_NAME}' configured${NC}"
-echo -e "${YELLOW}   • Users and groups synced from LDAP to Keycloak${NC}"
+echo -e "${YELLOW}   • Role mapper 'role-mapper-${REALM_NAME}' configured${NC}"
+echo -e "${YELLOW}   • Users and roles synced from LDAP to Keycloak${NC}"
 echo ""
 echo -e "${GREEN}🌐 Access your setup:${NC}"
-echo -e "${GREEN}   • Keycloak Admin : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
-echo -e "${GREEN}   • Realm URL      : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
-echo -e "${GREEN}   • LDAP Manager   : ${BLUE}http://localhost:8091${NC}"
+echo -e "${GREEN}   • Keycloak Admin     : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
+echo -e "${GREEN}   • Realm URL          : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
+echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${BLUE}http://localhost:8091${NC}"
 echo ""
 echo -e "${GREEN}🔑 Admin credentials:${NC}"
 echo -e "${GREEN}   • Keycloak Realm Admin: admin-${REALM_NAME} / admin-${REALM_NAME}${NC}"
 echo -e "${GREEN}   • Keycloak Master Admin: admin / admin${NC}"
-echo -e "${GREEN}   • LDAP Manager: cn=admin,dc=mycompany,dc=local / admin${NC}"
+echo -e "${GREEN}   • ${CYAN}LDAP${NC} Server (protocol): cn=admin,dc=mycompany,dc=local / admin${NC}"
+echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager (web UI): admin / admin${NC}"
 echo ""
-echo -e "${YELLOW}💡 Expected groups synced: admins, developers, ds1, ds2, ds3, user${NC}"
+echo -e "${YELLOW}💡 Expected roles created: admin, developer, ds_member, user${NC}"
 
 echo -e "${YELLOW}💡 Expected users synced: admin, alice, bob, charlie, willem, jp, louis, razvan, jack, andre, anwar${NC}"
 echo ""
@@ -162,16 +163,23 @@ echo -e "${YELLOW}   ./start_all.sh my-realm${NC}                    # Full auto
 echo -e "${YELLOW}   ./start_all.sh my-realm --check-steps${NC}      # Interactive mode with confirmations"
 echo -e "${YELLOW}   ./start_all.sh --check-steps${NC}               # Interactive mode, will prompt for realm name"
 
-# --- Highlighted message and prompt for loading additional users ---
+# --- Optional: Load additional users ---
+echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}⚠️  If you want to load additional users and group assignments into LDAP,${NC}"
-echo -e "${YELLOW}   you must run: ${WHITE}./load_additional_users.sh${NC}"
-echo -e "${YELLOW}   This will import users.ldif and group_assign.ldif into LDAP.${NC}"
+echo -e "${YELLOW}💡 Optional: Load additional users and group assignments into LDAP${NC}"
+echo -e "${YELLOW}   This will import additional data from users.ldif and group_assign.ldif${NC}"
+echo -e "${YELLOW}   Run this if you want to add more test users beyond the basic setup${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -en "${CYAN}Do you want to run ./load_additional_users.sh now? (Y/n): ${NC}"
+echo -en "${CYAN}Do you want to load additional users now? (y/N - default is No): ${NC}"
 read -r run_additional
 if [ "${run_additional}" = "Y" ] || [ "${run_additional}" = "y" ]; then
-    "$START_DIR"/load_additional_users.sh
+    "$START_DIR"/load_additional_users.sh "${REALM_NAME}"
+    echo ""
+    echo -e "${GREEN}✅ Additional users loaded. You may want to re-sync LDAP:${NC}"
+    echo -e "${GREEN}   cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
 else
-    echo -e "${YELLOW}Skipping additional users import. You can run it manually later with:${NC} ./load_additional_users.sh"
+    echo -e "${YELLOW}Skipped additional users import. You can run it manually later with:${NC}"
+    echo -e "${YELLOW}   ./load_additional_users.sh${NC}"
+    echo -e "${YELLOW}   Then re-sync with: cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
 fi
+

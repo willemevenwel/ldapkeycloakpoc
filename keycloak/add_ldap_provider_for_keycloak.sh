@@ -273,7 +273,6 @@ get_admin_token
 get_realm_id
 check_ldap_exists
 create_ldap_provider
-create_group_mapper
 verify_ldap_provider
 
 echo -e "${GREEN}🎉 ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} configuration completed successfully!${NC}"
@@ -290,7 +289,7 @@ echo -e "   • Users DN       : ou=users,dc=mycompany,dc=local"
 echo -e "   • Groups DN      : ou=groups,dc=mycompany,dc=local"
 echo -e "   • Groups Filter  : Syncing all groups: admins, developers, ds1, ds2, ds3, user"
 echo -e "   • Edit Mode      : READ_ONLY"
-echo -e "   • Group Mapper   : group-mapper-${REALM} (all groups)"
+echo -e "   • Role Mapper    : Will be created by update_role_mapper.sh"
 echo -e "   • Authentication : $([ "$USE_MASTER_ADMIN" = "true" ] && echo "Master Admin" || echo "Realm Admin")"
 echo ""
 echo -e "${GREEN}🌐 Access URLs:${NC}"
@@ -314,5 +313,6 @@ echo -e "${YELLOW}   3. Logging out and back in to ${MAGENTA}Keycloak${NC}${NC}"
 echo ""
 echo -e "${YELLOW}🔧 To debug further, run: ${WHITE}./debug_ldap_provider.sh ${REALM}${NC}"
 echo ""
-echo -e "${CYAN}➡️  Next step: Run sync to import users and groups:${NC}"
-echo -e "${CYAN}   ./sync_ldap.sh ${REALM}${NC}"
+echo -e "${CYAN}➡️  Next steps:${NC}"
+echo -e "${CYAN}   1. Create role mapper: ./update_role_mapper.sh ${REALM}${NC}"
+echo -e "${CYAN}   2. Sync users and roles: ./sync_ldap.sh ${REALM}${NC}"

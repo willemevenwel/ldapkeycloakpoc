@@ -12,7 +12,7 @@ WHITE='\033[0;37m'
 NC='\033[0m' # No Color
 
 # Keycloak LDAP Sync Script
-# This script triggers complete synchronization of users and groups from LDAP to Keycloak
+# This script triggers complete synchronization of users and roles from LDAP to Keycloak
 
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
@@ -27,7 +27,7 @@ ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
 KEYCLOAK_URL="http://localhost:8090"
 
-echo -e "${GREEN}🔄 Syncing ${CYAN}LDAP${NC} Users and Groups for realm: ${REALM}${NC}"
+echo -e "${GREEN}🔄 Syncing ${CYAN}LDAP${NC} Users and Roles for realm: ${REALM}${NC}"
 
 # Function to get admin token
 get_admin_token() {
@@ -105,34 +105,34 @@ sync_users() {
     fi
 }
 
-# Function to sync groups
-sync_groups() {
-    echo -e "${YELLOW}🔄 Syncing groups from ${CYAN}LDAP${NC}...${NC}"
+# Function to sync roles
+sync_roles() {
+    echo -e "${YELLOW}🔄 Syncing roles from ${CYAN}LDAP${NC}...${NC}"
     
-    # Get the group mapper ID
-    GROUP_MAPPER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
+    # Get the role mapper ID
+    ROLE_MAPPER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" | \
-        jq -r '.[] | select(.name=="group-mapper-'${REALM}'") | .id')
+        jq -r '.[] | select(.name=="role-mapper-'${REALM}'") | .id')
     
-    if [ -n "$GROUP_MAPPER_ID" ] && [ "$GROUP_MAPPER_ID" != "null" ]; then
-        GROUP_SYNC_RESPONSE=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/user-storage/${LDAP_ID}/mappers/${GROUP_MAPPER_ID}/sync?direction=fedToKeycloak" \
+    if [ -n "$ROLE_MAPPER_ID" ] && [ "$ROLE_MAPPER_ID" != "null" ]; then
+        ROLE_SYNC_RESPONSE=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/user-storage/${LDAP_ID}/mappers/${ROLE_MAPPER_ID}/sync?direction=fedToKeycloak" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
-            -o /tmp/group_sync_response.json)
+            -o /tmp/role_sync_response.json)
         
-        if [ "$GROUP_SYNC_RESPONSE" = "200" ]; then
-            SYNC_RESULT=$(cat /tmp/group_sync_response.json)
-            echo -e "${GREEN}✅ Group sync completed (Mapper ID: ${GROUP_MAPPER_ID})${NC}"
+        if [ "$ROLE_SYNC_RESPONSE" = "200" ]; then
+            SYNC_RESULT=$(cat /tmp/role_sync_response.json)
+            echo -e "${GREEN}✅ Role sync completed (Mapper ID: ${ROLE_MAPPER_ID})${NC}"
             if [ "$SYNC_RESULT" != "{}" ]; then
                 echo -e "${BLUE}   Result: $SYNC_RESULT${NC}"
             fi
         else
-            echo -e "${RED}❌ Group sync failed (HTTP $GROUP_SYNC_RESPONSE)${NC}"
-            cat /tmp/group_sync_response.json
+            echo -e "${RED}❌ Role sync failed (HTTP $ROLE_SYNC_RESPONSE)${NC}"
+            cat /tmp/role_sync_response.json
         fi
     else
-        echo -e "${RED}❌ Could not find group mapper ID${NC}"
+        echo -e "${RED}❌ Could not find role mapper ID${NC}"
         echo -e "${YELLOW}   Available mappers:${NC}"
         curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
             -H "Authorization: Bearer ${TOKEN}" \
@@ -140,44 +140,44 @@ sync_groups() {
     fi
 }
 
-# Function to list current groups
-list_groups() {
-    echo -e "${YELLOW}📋 Current groups in Keycloak:${NC}"
-    GROUPS=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/groups" \
+# Function to list current roles
+list_roles() {
+    echo -e "${YELLOW}📋 Current realm roles in Keycloak:${NC}"
+    ROLES=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/roles" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json")
     
-    if [ "$(echo "$GROUPS" | jq '. | length')" -gt 0 ]; then
-        echo "$GROUPS" | jq -r '.[] | "   • " + .name + " (ID: " + .id + ", Members: " + (.subGroupCount // 0 | tostring) + ")"'
+    if [ "$(echo "$ROLES" | jq '. | length')" -gt 0 ]; then
+        echo "$ROLES" | jq -r '.[] | "   • " + .name + " (ID: " + .id + ")"'
     else
-        echo -e "${YELLOW}   No groups found${NC}"
+        echo -e "${YELLOW}   No roles found${NC}"
     fi
 }
 
-# Function to verify group mapper configuration
-verify_group_mapper() {
-    echo -e "${YELLOW}🔍 Verifying group mapper configuration...${NC}"
+# Function to verify role mapper configuration
+verify_role_mapper() {
+    echo -e "${YELLOW}🔍 Verifying role mapper configuration...${NC}"
     
-    GROUP_MAPPER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
+    ROLE_MAPPER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" | \
-        jq -r '.[] | select(.name=="group-mapper-'${REALM}'") | .id')
+        jq -r '.[] | select(.name=="role-mapper-'${REALM}'") | .id')
     
-    if [ -n "$GROUP_MAPPER_ID" ] && [ "$GROUP_MAPPER_ID" != "null" ]; then
-        MAPPER_CONFIG=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components/${GROUP_MAPPER_ID}" \
+    if [ -n "$ROLE_MAPPER_ID" ] && [ "$ROLE_MAPPER_ID" != "null" ]; then
+        MAPPER_CONFIG=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components/${ROLE_MAPPER_ID}" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json")
         
-        GROUPS_DN=$(echo "$MAPPER_CONFIG" | jq -r '.config["groups.dn"][0] // "Not set"')
-        GROUPS_FILTER=$(echo "$MAPPER_CONFIG" | jq -r '.config["groups.ldap.filter"][0] // "No filter"')
+        ROLES_DN=$(echo "$MAPPER_CONFIG" | jq -r '.config["roles.dn"][0] // "Not set"')
+        ROLES_FILTER=$(echo "$MAPPER_CONFIG" | jq -r '.config["roles.ldap.filter"][0] // "No filter"')
         MODE=$(echo "$MAPPER_CONFIG" | jq -r '.config.mode[0] // "Not set"')
         
-        echo -e "${GREEN}✅ Group mapper found (ID: ${GROUP_MAPPER_ID})${NC}"
-        echo -e "   • Groups DN: ${GROUPS_DN}"
-        echo -e "   • Groups Filter: ${GROUPS_FILTER}"
+        echo -e "${GREEN}✅ Role mapper found (ID: ${ROLE_MAPPER_ID})${NC}"
+        echo -e "   • Roles DN: ${ROLES_DN}"
+        echo -e "   • Roles Filter: ${ROLES_FILTER}"
         echo -e "   • Mode: ${MODE}"
     else
-        echo -e "${RED}❌ Group mapper not found${NC}"
+        echo -e "${RED}❌ Role mapper not found${NC}"
     fi
 }
 
@@ -186,15 +186,15 @@ echo -e "${GREEN}🚀 Starting complete LDAP sync for realm: ${REALM}${NC}"
 
 get_admin_token
 find_ldap_provider
-verify_group_mapper
+verify_role_mapper
 sync_users
-sync_groups
-list_groups
+sync_roles
+list_roles
 
 echo -e "${GREEN}🎉 Complete LDAP sync completed!${NC}"
 echo ""
-echo -e "${YELLOW}💡 If users or groups are not appearing, try:${NC}"
-echo -e "${YELLOW}   1. Check the LDAP filter in the group mapper${NC}"
+echo -e "${YELLOW}💡 If users or roles are not appearing, try:${NC}"
+echo -e "${YELLOW}   1. Check the LDAP filter in the role mapper${NC}"
 echo -e "${YELLOW}   2. Verify LDAP connectivity${NC}"
 echo -e "${YELLOW}   3. Check LDAP group structure${NC}"
 echo -e "${YELLOW}   4. Refresh the Keycloak admin console${NC}"

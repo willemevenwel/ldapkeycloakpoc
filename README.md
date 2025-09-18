@@ -85,21 +85,31 @@ docker-compose build
 
 ## Quick Start
 
-1. **Start the entire LDAP ecosystem:**
-   ```bash
-   ./start.sh
-   ```
+### Option 1: Complete LDAP-Keycloak Setup (Recommended)
+```bash
+# Complete automated setup with realm creation and LDAP integration
+./start_all.sh <realm-name>
+
+# Interactive mode with step-by-step confirmation
+./start_all.sh <realm-name> --check-steps
+```
+
+### Option 2: LDAP-Only Setup
+```bash
+# Start LDAP services only (no Keycloak realm setup)
+./start.sh
+```
    
    **Note**: On first run, Docker will automatically build the LDAP User Manager image from the included Dockerfile. This may take a few minutes to download dependencies and build the PHP/Apache container.
 
 2. **Access the services:**
-   - **LDAP Server**: `ldap://localhost:389`
-   - **LDAP Web UI**: http://localhost:8080
+   - **LDAP Server Protocol**: `ldap://localhost:389`
+   - **LDAP Web Manager**: http://localhost:8091
    - **Keycloak**: http://localhost:8090
 
-3. **Login to LDAP Web UI:**
-   - **Username**: `admin`
-   - **Password**: `admin`
+3. **Login credentials:**
+   - **LDAP Web Manager (web UI)**: `admin` / `admin`
+   - **LDAP Server (protocol)**: `cn=admin,dc=mycompany,dc=local` / `admin`
 
 4. **Login to Keycloak:**
    - **Username**: `admin`
@@ -132,17 +142,34 @@ This creates:
 - Admin user: `admin-company` / `admin-company`
 - Proper realm configuration for LDAP integration
 
-#### Configuring LDAP User Federation
+#### Complete Automated Setup
 ```bash
-# Add LDAP provider to a realm
-./keycloak/add_ldap_provider_for_keycloak.sh company
+# Complete setup: services + realm + LDAP provider + role mapping + sync
+./start_all.sh company
+
+# Interactive mode with step-by-step confirmation
+./start_all.sh company --check-steps
 ```
 
+#### Manual Step-by-Step Setup
+```bash
+# 1. Add LDAP provider to a realm
+./keycloak/add_ldap_provider_for_keycloak.sh company
+
+# 2. Create role mapper for LDAP groups → Keycloak roles
+./keycloak/update_role_mapper.sh company
+
+# 3. Sync users and roles from LDAP
+./keycloak/sync_ldap.sh company
+```
+
+#### LDAP Integration Features
 This automatically configures:
 - LDAP connection to the local OpenLDAP server
 - User import from `ou=users,dc=mycompany,dc=local`
-- Group mapping from `ou=groups,dc=mycompany,dc=local`
+- **Role mapping** from `ou=groups,dc=mycompany,dc=local` to Keycloak roles
 - Read-only federation (users managed in LDAP)
+- Anticipated role creation (admin, developer, ds_member, user)
 - POSIX group mapping for group membership
 
 #### LDAP Provider Configuration Details
@@ -179,13 +206,37 @@ Output example:
 }
 ```
 
+#### Role Mapping Configuration
+```bash
+# Create role mapper to map LDAP groups to Keycloak roles
+./keycloak/update_role_mapper.sh company
+```
+
+This creates a role-ldap-mapper that:
+- Maps LDAP groups (`admins`, `developers`, etc.) to Keycloak roles
+- Automatically creates anticipated roles if they don't exist
+- Syncs group membership to role assignment
+
+#### LDAP Synchronization
+```bash
+# Sync users and roles from LDAP to Keycloak
+./keycloak/sync_ldap.sh company
+```
+
+The sync script:
+- Triggers full user synchronization from LDAP
+- Syncs role assignments based on LDAP group membership
+- Provides detailed status and error reporting
+- Lists current users and roles after sync
+
 #### Manual Verification
 Access the Keycloak Admin Console:
 1. Go to http://localhost:8090/admin/
 2. Login with master admin (`admin` / `admin`)
 3. Select your realm from the dropdown
-4. Navigate to **User Federation**
-5. Verify the LDAP provider appears and is enabled
+4. Navigate to **User Federation** → verify LDAP provider
+5. Navigate to **Realm Roles** → verify synced roles
+6. Navigate to **Users** → verify synced users and role assignments
 
 #### Common Keycloak URLs
 ```bash
@@ -257,6 +308,7 @@ This will:
 - Load all users from `data/users.csv`
 - Create additional groups as needed
 - Update existing group memberships
+- **Prompt to sync LDAP to Keycloak** (if using Keycloak integration)
 
 ### CSV Files
 - **`data/admins.csv`**: Complete admin user data (loaded on startup)

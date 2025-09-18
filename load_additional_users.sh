@@ -13,6 +13,10 @@ NC='\033[0m' # No Color
 
 # load_additional_users.sh
 # Script to manually load additional users into LDAP after startup
+# Usage: ./load_additional_users.sh [realm-name]
+
+# Get realm name from parameter if provided
+REALM_NAME="$1"
 
 echo -e "🔄 Loading additional users into ${CYAN}LDAP${NC}..."
 
@@ -53,7 +57,7 @@ if ! docker ps | grep -q "ldap"; then
 fi
 
 if ! docker ps | grep -q "ldap-manager"; then
-    echo -e "❌ Error: ${WHITE}LDAP User Manager${NC} container 'ldap-manager' is not running."
+    echo -e "❌ Error: ${WHITE}${CYAN}LDAP${NC} Web Manager${NC} container 'ldap-manager' is not running."
     echo "Please start the system first with: ./start.sh"
     exit 1
 fi
@@ -164,9 +168,9 @@ echo -e "🔍 Verifying import..."
 USER_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost -b "ou=users,dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep "uid:" | wc -l)
 GROUP_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost -b "ou=groups,dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin "(objectClass=posixGroup)" cn 2>/dev/null | grep "cn:" | wc -l)
 
-echo -e "📊 Import verification:"
-echo -e "   • Users in LDAP: ${USER_COUNT}"
-echo -e "   • Groups in LDAP: ${GROUP_COUNT}"
+echo -e "� Import verification:"
+echo -e "   • Users in ${CYAN}LDAP${NC}:  ${USER_COUNT}"
+echo -e "   • Groups in ${CYAN}LDAP${NC}: ${GROUP_COUNT}"
 
 if [ "$USER_COUNT" -gt 1 ] && [ "$GROUP_COUNT" -gt 1 ]; then
     echo "✅ Additional users imported successfully!"
@@ -178,12 +182,12 @@ fi
 
 echo ""
 echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"
-echo -e "   - ${CYAN}LDAP${NC} Server : ${BLUE}ldap://localhost:389${NC}"
-echo -e "   - Web UI      : ${BLUE}http://localhost:8080${NC}"
-echo "   - Login       : admin/admin"
+echo -e "   ${CYAN}LDAP${NC} Protocol:            ${BLUE}ldap://localhost:389${NC}"
+echo -e "   ${CYAN}LDAP${NC} Web Manager:         ${BLUE}http://localhost:8091${NC}"
+echo -e "   ${CYAN}LDAP${NC} Web Manager Login:   ${YELLOW}admin / admin${NC}"
 echo ""
 echo "📊 To verify the import, you can run:"
-echo "   ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=mycompany,dc=local' -w admin -b 'ou=users,dc=mycompany,dc=local' '(objectClass=inetOrgPerson)'"
+echo -e "   ${YELLOW}ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=mycompany,dc=local' -w admin -b 'ou=users,dc=mycompany,dc=local' '(objectClass=inetOrgPerson)'${NC}"
 
 # Clean up with retry
 echo "🧹 Cleanup..."
@@ -208,8 +212,44 @@ if [ -f "ldif/additional_users_modify.ldif" ]; then
 fi
 echo "🧹 Cleanup completed"
 
-# Exit with appropriate code
+# Prompt to run LDAP sync if import was successful
 if [ "$IMPORT_SUCCESS" = true ]; then
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}📋 Optional: Sync the new users and roles to Keycloak${NC}"
+    echo -e "${YELLOW}   This will synchronize the newly added ${CYAN}LDAP${NC} users and roles with Keycloak${NC}"
+    echo -e "${YELLOW}   Recommended to run this to make the new users available in Keycloak${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    if [ -n "$REALM_NAME" ]; then
+        echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak realm '${REALM_NAME}' now? (Y/n - default is Yes): ${NC}"
+    else
+        echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak now? (Y/n - default is Yes): ${NC}"
+    fi
+    read -r run_sync
+    if [ "${run_sync}" = "N" ] || [ "${run_sync}" = "n" ]; then
+        echo -e "${YELLOW}Skipped ${CYAN}LDAP${NC} sync. You can run it manually later with:${NC}"
+        if [ -n "$REALM_NAME" ]; then
+            echo -e "${YELLOW}   cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
+        else
+            echo -e "${YELLOW}   cd keycloak && ./sync_ldap.sh <realm-name>${NC}"
+        fi
+    else
+        # Use provided realm name or ask for it
+        if [ -n "$REALM_NAME" ]; then
+            realm_name="$REALM_NAME"
+        else
+            echo -en "${CYAN}Enter realm name to sync (e.g., wallmart, capgemini): ${NC}"
+            read -r realm_name
+        fi
+        
+        if [ -n "$realm_name" ]; then
+            cd keycloak && ./sync_ldap.sh "$realm_name"
+            echo ""
+            echo -e "${GREEN}✅ ${CYAN}LDAP${NC} sync completed for realm: ${realm_name}${NC}"
+        else
+            echo -e "${RED}❌ No realm name provided, skipping sync${NC}"
+        fi
+    fi
     exit 0
 else
     exit 1

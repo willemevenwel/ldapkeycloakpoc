@@ -114,7 +114,7 @@ group_assign_ldif = os.path.join(output_dir, "group_assign.ldif")
 # Remove old LDIF files if they exist
 for f in [admins_ldif, users_ldif, group_assign_ldif]:
     if os.path.exists(f):
-        print(f"Deleting old LDIF file: {f}")
+        print(f"⚠️🗑️  Deleting old LDIF file: {f}")
         os.remove(f)
 
 print(f"Using CSV file: {input_csv}")

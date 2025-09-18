@@ -186,6 +186,50 @@ get_user_id() {
     echo -e "${GREEN}✅ Got user ID: ${USER_ID}${NC}"
 }
 
+# Function to create anticipated realm roles (expected from future LDAP group mappings)
+create_anticipated_realm_roles() {
+    echo -e "${YELLOW}🏗️  Creating anticipated realm roles (expected from LDAP groups)...${NC}"
+    
+    # Configure which roles to pre-create in anticipation of LDAP group mappings
+    # Add additional roles here if you expect more LDAP groups to map to specific role names
+    REALM_ROLES_TO_CREATE=("admins" "developers")
+    
+    echo -e "${BLUE}💡 These roles are created in anticipation of LDAP groups that will map to them${NC}"
+    echo -e "${BLUE}   Future LDAP groups can be mapped to these pre-defined role names${NC}"
+    echo -e "${BLUE}   To add more anticipated roles, modify REALM_ROLES_TO_CREATE array above${NC}"
+    echo ""
+    
+    for ROLE in "${REALM_ROLES_TO_CREATE[@]}"; do
+        echo -e "${YELLOW}   Creating anticipated role: ${ROLE} (expected from LDAP group mapping)${NC}"
+        
+        ROLE_CONFIG=$(cat <<EOF
+{
+    "name": "${ROLE}",
+    "description": "Pre-created role anticipating LDAP group mapping"
+}
+EOF
+)
+        
+        HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}/roles" \
+            -H "Authorization: Bearer ${MASTER_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${ROLE_CONFIG}" \
+            -o /tmp/role_create_response.json)
+        
+        if [ "$HTTP_STATUS" = "201" ]; then
+            echo -e "${GREEN}   ✅ Created anticipated role: ${ROLE}${NC}"
+        elif [ "$HTTP_STATUS" = "409" ]; then
+            echo -e "${YELLOW}   ⚠️  Role ${ROLE} already exists${NC}"
+        else
+            echo -e "${RED}   ❌ Failed to create role ${ROLE} (HTTP $HTTP_STATUS)${NC}"
+            cat /tmp/role_create_response.json
+        fi
+    done
+    
+    echo -e "${CYAN}📝 Note: Additional roles will be auto-created by LDAP mapper for groups not listed above${NC}"
+    echo ""
+}
+
 # Function to assign realm management roles to admin user
 assign_admin_roles() {
     echo -e "${YELLOW}👑 Assigning realm admin roles to '${ADMIN_USERNAME}'...${NC}"
@@ -246,6 +290,7 @@ check_realm_exists
 create_realm
 create_realm_admin
 get_user_id
+create_anticipated_realm_roles
 assign_admin_roles
 test_realm_admin_login
 
