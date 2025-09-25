@@ -2,7 +2,7 @@ import csv, hashlib, base64
 import os
 import sys
 
-LDAP_DOMAIN = "dc=mycompany,dc=local"
+LDAP_DOMAIN = "dc=min,dc=io"
 USERS_OU = "ou=users," + LDAP_DOMAIN
 GROUPS_OU = "ou=groups," + LDAP_DOMAIN
 
@@ -135,13 +135,7 @@ if os.path.exists(admins_csv):
 print(f"Admin users identified: {', '.join(admin_usernames)}")
 
 def write_base_structure(ldif):
-    """Write the base LDAP domain and OU structure"""
-    ldif.write(f"dn: {LDAP_DOMAIN}\n")
-    ldif.write("objectClass: dcObject\n")
-    ldif.write("objectClass: organization\n")
-    ldif.write("dc: mycompany\n")
-    ldif.write("o: My Company\n\n")
-    
+    """Write the LDAP OU structure (base domain already exists in MinIO image)"""
     ldif.write(f"dn: {USERS_OU}\n")
     ldif.write("objectClass: organizationalUnit\n")
     ldif.write("ou: users\n\n")

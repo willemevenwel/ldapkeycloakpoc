@@ -91,7 +91,18 @@ echo -e "${GREEN}🔄 Step 1: Starting all services...${NC}"
 check_success
 echo -e "${GREEN}✅ Services started successfully${NC}"
 echo -e "${YELLOW}⏳ Waiting for services to fully initialize...${NC}"
-sleep 5
+sleep 10
+
+# Step 1.5: Generate LDIF files and load initial data
+confirm_step "About to generate LDIF files from CSV data and load them into LDAP"
+echo -e "${GREEN}🔄 Step 1.5: Generating LDIF files and loading initial data...${NC}"
+echo -e "${CYAN}📝 Generating LDIF from CSV files...${NC}"
+python3 csv_to_ldif.py data/admins.csv
+check_success
+echo -e "${CYAN}📥 Loading admin users into LDAP...${NC}"
+./ldap/setup_ldap_data.sh
+check_success
+echo -e "${GREEN}✅ Initial LDAP data loaded successfully${NC}"
 echo ""
 
 # Step 2: Create Keycloak realm

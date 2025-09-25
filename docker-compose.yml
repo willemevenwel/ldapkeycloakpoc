@@ -1,17 +1,19 @@
 version: '3.8'
 services:
   ldap:
-    image: alpine:3.18
+    image: quay.io/minio/openldap:latest
     container_name: ldap
-    command: /opt/import/start_ldap.sh
+    environment:
+      - LDAP_ORGANISATION=My Company
+      - LDAP_DOMAIN=min.io
+      - LDAP_BASE_DN=dc=min,dc=io
+      - LDAP_ADMIN_PASSWORD=admin
     ports:
       - "389:389"
+      - "636:636"
     volumes:
-      - ./ldif:/opt/output
-      - ./csv_to_ldif.py:/opt/import/csv_to_ldif.py:ro
-      - ./data/users.csv:/opt/import/users.csv:ro
-      - ./data/admins.csv:/opt/import/admins.csv:ro
-      - ./ldap/start_ldap.sh:/opt/import/start_ldap.sh:ro
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
 
   ldap-manager:
     build: ./ldap-user-manager
@@ -19,12 +21,12 @@ services:
     container_name: ldap-manager
     environment:
       - LDAP_URI=ldap://ldap:389
-      - LDAP_BASE_DN=dc=mycompany,dc=local
+      - LDAP_BASE_DN=dc=min,dc=io
       - LDAP_USER_OU=users
       - LDAP_GROUP_OU=groups
       - LDAP_REQUIRE_STARTTLS=FALSE
       - LDAP_ADMINS_GROUP=admins
-      - LDAP_ADMIN_BIND_DN=cn=admin,dc=mycompany,dc=local
+      - LDAP_ADMIN_BIND_DN=cn=admin,dc=min,dc=io
       - LDAP_ADMIN_BIND_PWD=admin
       - NO_HTTPS=true
       - ENFORCE_SAFE_SYSTEM_NAMES=FALSE
@@ -42,3 +44,7 @@ services:
       - KEYCLOAK_ADMIN_PASSWORD=admin
     ports:
       - "8090:8080"
+
+volumes:
+  ldap_data:
+  ldap_config:
