@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # load_additional_users.sh
 # Script to manually load additional users into LDAP after startup
-# Usage: ./load_additional_users.sh [realm-name]
+# Usage: ./ldap/load_additional_users.sh [realm-name]
 
 # Get realm name from parameter if provided
 REALM_NAME="$1"
@@ -69,8 +69,8 @@ echo -e "✅ ${CYAN}LDAP${NC} containers are running"
 
 # Generate additional users LDIF
 
-echo "📝 Generating LDIF for additional users..."
-python3 csv_to_ldif.py data/users.csv
+echo "📝 Generating LDIF for additional users using containerized Python..."
+docker exec python-bastion python python/csv_to_ldif.py data/users.csv
 
 if [ $? -ne 0 ]; then
     echo "❌ Error: Failed to generate additional users LDIF"

@@ -39,13 +39,15 @@ ldapkeycloakpoc/
 ├── data/
 │   ├── users.csv               # User data and group memberships
 │   └── admins.csv              # Admin user definitions
-├── csv_to_ldif.py              # CSV to LDIF conversion script
+├── python/
+│   └── csv_to_ldif.py          # CSV to LDIF conversion script
 ├── keycloak/                   # Keycloak management scripts
 │   ├── create_realm.sh         # Create new Keycloak realms
 │   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
 │   └── debug_realm_ldap.sh     # Debug realm and LDAP provider status
 ├── ldap/
-│   └── start_ldap.sh           # LDAP container startup script
+│   ├── setup_ldap_data.sh      # LDAP container startup script  
+│   └── load_additional_users.sh # Load additional users after startup
 ├── ldap-user-manager/          # Web UI source code (from external repo)
 │   ├── Dockerfile
 │   ├── www/                    # PHP web application
@@ -55,6 +57,8 @@ ldapkeycloakpoc/
 │   └── admins.ldif             # Generated admin group data
 ├── start.sh                    # Main startup script
 ├── stop.sh                     # Stop all services script
+├── start_all.sh                # Traditional complete setup script
+├── test_all.sh                 # Verification script for setup
 ├── load_additional_users.sh    # Load additional users after startup
 └── README.md                   # This file
 ```
@@ -62,8 +66,53 @@ ldapkeycloakpoc/
 ## Prerequisites
 
 - Docker and Docker Compose
-- Python 3 (for local LDIF generation/testing)
 - LDAP client tools (optional, for testing): `brew install openldap` on macOS
+
+### Cross-Platform Support 🚀
+
+**All Python execution is now containerized!** No need to install Python locally on any platform.
+
+**Perfect for:**
+- ✅ **Windows users** (no need for WSL or Linux tools)
+- ✅ **Users without Python installed**
+- ✅ **Consistent execution environment** across all platforms
+- ✅ **No dependency management hassles**
+- ✅ **Direct containerized execution via Docker commands**
+
+### Usage Methods
+
+**All platforms use the same Docker-based approach:**
+
+```bash
+# Complete LDAP-Keycloak setup
+./start_all.sh mycompany
+
+# Interactive setup with confirmations
+./start_all.sh mycompany --check-steps
+
+# LDAP-only setup
+./start.sh
+
+# Load additional users
+./ldap/load_additional_users.sh
+
+# Generate LDIF manually
+docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
+
+# Get help
+docker exec python-bastion python python/csv_to_ldif.py help
+
+# Interactive shell in container
+docker exec -it python-bastion bash
+```
+
+### Docker Compose Services
+
+The project now includes four containers:
+- **ldap**: OpenLDAP server
+- **ldap-manager**: Web-based LDAP management interface  
+- **keycloak**: Identity and access management
+- **utils**: Python utilities container (for cross-platform script execution)
 
 ### Manual Build (Optional)
 
@@ -85,7 +134,9 @@ docker-compose build
 
 ## Quick Start
 
-### Option 1: Complete LDAP-Keycloak Setup (Recommended)
+### Complete LDAP-Keycloak Setup
+
+**All platforms use the same approach:**
 ```bash
 # Complete automated setup with realm creation and LDAP integration
 ./start_all.sh <realm-name>
@@ -94,9 +145,16 @@ docker-compose build
 ./start_all.sh <realm-name> --check-steps
 ```
 
-### Option 2: LDAP-Only Setup
+**Example:**
 ```bash
-# Start LDAP services only (no Keycloak realm setup)
+# Set up everything for "mycompany" realm
+./start_all.sh mycompany
+```
+
+### LDAP-Only Setup
+
+**Start LDAP services only (no Keycloak realm setup):**
+```bash
 ./start.sh
 ```
    
@@ -300,8 +358,9 @@ The system is configured to load **only admin users** on startup for better cont
 
 ### Loading Additional Users
 After startup, manually load additional users:
+
 ```bash
-./load_additional_users.sh
+./ldap/load_additional_users.sh
 ```
 
 This will:
@@ -310,22 +369,27 @@ This will:
 - Update existing group memberships
 - **Prompt to sync LDAP to Keycloak** (if using Keycloak integration)
 
+## LDAP Configuration
+
+## Cross-Platform Utilities
+
 ### CSV Files
 - **`data/admins.csv`**: Complete admin user data (loaded on startup)
 - **`data/users.csv`**: Additional user data (loaded manually)
 
 ### CSV to LDIF Converter
-The `csv_to_ldif.py` script auto-detects based on filename:
+The `python/csv_to_ldif.py` script auto-detects based on filename:
 
+**Containerized Method:**
 ```bash
 # Process admin users (auto-detected from filename)
-python3 csv_to_ldif.py data/admins.csv
+docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
 
 # Process additional users (auto-detected from filename)
-python3 csv_to_ldif.py data/users.csv
+docker exec python-bastion python python/csv_to_ldif.py data/users.csv
 
 # Show help
-python3 csv_to_ldif.py help
+docker exec python-bastion python python/csv_to_ldif.py help
 ```
 
 ## LDAP Configuration
@@ -662,7 +726,7 @@ For debugging the conversion process:
 
 ```bash
 # Generate LDIF manually
-python3 csv_to_ldif.py
+docker exec python-bastion python python/csv_to_ldif.py
 
 # Check generated files
 cat ldif/users.ldif
@@ -699,7 +763,7 @@ Each group contains:
 
 ### Alternative: groupOfNames
 
-If you need `groupOfNames` instead (uses full DN membership), modify `csv_to_ldif.py`:
+If you need `groupOfNames` instead (uses full DN membership), modify `python/csv_to_ldif.py`:
 
 ```python
 # Change this line:
@@ -740,7 +804,7 @@ ldif.write(f"member: uid={member_uid},{USERS_OU}\n")
 
 Groups are created dynamically based on CSV content:
 ```python
-# From csv_to_ldif.py
+# From python/csv_to_ldif.py
 for group in row["groups"].split(";"):
     group = group.strip()
     groups.setdefault(group, []).append(user_dn)
@@ -754,7 +818,7 @@ This means:
 
 ### Modifying User/Group Structure
 
-To change the LDAP structure, edit `csv_to_ldif.py`:
+To change the LDAP structure, edit `python/csv_to_ldif.py`:
 
 1. **Change base domain**: Modify `LDAP_DOMAIN` variable
 2. **Change OUs**: Modify `USERS_OU` and `GROUPS_OU` variables
@@ -766,10 +830,9 @@ To change the LDAP structure, edit `csv_to_ldif.py`:
 ### Startup Sequence
 1. `start.sh` → `docker-compose up -d`
 2. LDAP container starts with Alpine Linux
-3. `start_ldap.sh` runs inside container:
    - Installs OpenLDAP, Python, and dependencies
    - Creates LDAP configuration with MDB backend and NIS schema
-   - Runs `csv_to_ldif.py` to convert CSV to LDIF
+   - Runs `python/csv_to_ldif.py` to convert CSV to LDIF
    - Starts LDAP server
    - Imports generated LDIF files
 4. Web UI container starts and connects to LDAP server

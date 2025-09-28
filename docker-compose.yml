@@ -5,8 +5,8 @@ services:
     container_name: ldap
     environment:
       - LDAP_ORGANISATION=My Company
-      - LDAP_DOMAIN=min.io
-      - LDAP_BASE_DN=dc=min,dc=io
+      - LDAP_DOMAIN=mycompany.local
+      - LDAP_BASE_DN=dc=mycompany,dc=local
       - LDAP_ADMIN_PASSWORD=admin
     ports:
       - "389:389"
@@ -21,12 +21,12 @@ services:
     container_name: ldap-manager
     environment:
       - LDAP_URI=ldap://ldap:389
-      - LDAP_BASE_DN=dc=min,dc=io
+      - LDAP_BASE_DN=dc=mycompany,dc=local
       - LDAP_USER_OU=users
       - LDAP_GROUP_OU=groups
       - LDAP_REQUIRE_STARTTLS=FALSE
       - LDAP_ADMINS_GROUP=admins
-      - LDAP_ADMIN_BIND_DN=cn=admin,dc=min,dc=io
+      - LDAP_ADMIN_BIND_DN=cn=admin,dc=mycompany,dc=local
       - LDAP_ADMIN_BIND_PWD=admin
       - NO_HTTPS=true
       - ENFORCE_SAFE_SYSTEM_NAMES=FALSE
@@ -44,6 +44,25 @@ services:
       - KEYCLOAK_ADMIN_PASSWORD=admin
     ports:
       - "8090:8080"
+
+  # Python utilities container for cross-platform script execution
+  utils:
+    image: python:3.11-slim
+    container_name: python-bastion
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - ./data:/opt/import
+      - ./ldif:/opt/output
+    environment:
+      - PYTHONPATH=/workspace
+      - PYTHONUNBUFFERED=1
+    command: tail -f /dev/null  # Keep container running
+    depends_on:
+      - ldap
+      - keycloak
+    networks:
+      - default
 
 volumes:
   ldap_data:

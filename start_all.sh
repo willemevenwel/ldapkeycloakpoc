@@ -96,8 +96,8 @@ sleep 10
 # Step 1.5: Generate LDIF files and load initial data
 confirm_step "About to generate LDIF files from CSV data and load them into LDAP"
 echo -e "${GREEN}🔄 Step 1.5: Generating LDIF files and loading initial data...${NC}"
-echo -e "${CYAN}📝 Generating LDIF from CSV files...${NC}"
-python3 csv_to_ldif.py data/admins.csv
+echo -e "${CYAN}📝 Generating LDIF from CSV files using containerized Python...${NC}"
+docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
 check_success
 echo -e "${CYAN}📥 Loading admin users into LDAP...${NC}"
 ./ldap/setup_ldap_data.sh
@@ -184,13 +184,13 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 echo -en "${CYAN}Do you want to load additional users now? (y/N - default is No): ${NC}"
 read -r run_additional
 if [ "${run_additional}" = "Y" ] || [ "${run_additional}" = "y" ]; then
-    "$START_DIR"/load_additional_users.sh "${REALM_NAME}"
+    "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}"
     echo ""
     echo -e "${GREEN}✅ Additional users loaded. You may want to re-sync LDAP:${NC}"
     echo -e "${GREEN}   cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
 else
     echo -e "${YELLOW}Skipped additional users import. You can run it manually later with:${NC}"
-    echo -e "${YELLOW}   ./load_additional_users.sh${NC}"
+    echo -e "${YELLOW}   ./ldap/load_additional_users.sh${NC}"
     echo -e "${YELLOW}   Then re-sync with: cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
 fi
 
