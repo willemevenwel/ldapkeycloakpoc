@@ -73,16 +73,27 @@ echo ""
 
 # Test 2: LDAP service accessibility
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} service...${NC}"
-ldap_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "dc=mycompany,dc=local" -s base "(objectClass=*)" 2>/dev/null)
+
+# First check if LDAP container is responsive
+ldap_container_check=$(docker exec ldap echo "Container responsive" 2>/dev/null)
 if [ $? -eq 0 ]; then
-    check_result "pass" "${CYAN}LDAP${NC} service connectivity" "accessible on port 389"
+    check_result "pass" "${CYAN}LDAP${NC} container responsiveness" "container is responsive"
+    
+    # Now test LDAP service connectivity with timeout
+    ldap_test=$(timeout 10s docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "dc=mycompany,dc=local" -s base "(objectClass=*)" 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        check_result "pass" "${CYAN}LDAP${NC} service connectivity" "accessible on port 389"
+    else
+        check_result "fail" "${CYAN}LDAP${NC} service connectivity" "not accessible or timed out"
+        echo -e "${YELLOW}   💡 Try waiting longer for LDAP to fully initialize${NC}"
+    fi
 else
-    check_result "fail" "${CYAN}LDAP${NC} service connectivity" "not accessible"
+    check_result "fail" "${CYAN}LDAP${NC} container responsiveness" "container not responding"
 fi
 
 # Test 3: LDAP users and groups
-users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=users,dc=mycompany,dc=local" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:")
-groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=groups,dc=mycompany,dc=local" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")
+users_count=$(timeout 10s docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=users,dc=mycompany,dc=local" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:")
+groups_count=$(timeout 10s docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=groups,dc=mycompany,dc=local" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")
 
 if [ "$users_count" -gt 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} users imported" "$users_count users found"
