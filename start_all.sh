@@ -91,7 +91,29 @@ echo -e "${GREEN}🔄 Step 1: Starting all services...${NC}"
 check_success
 echo -e "${GREEN}✅ Services started successfully${NC}"
 echo -e "${YELLOW}⏳ Waiting for services to fully initialize...${NC}"
-sleep 10
+
+# More robust wait for Windows/slower systems
+echo -e "${CYAN}Checking service readiness...${NC}"
+sleep 5
+
+# Check if containers are actually running
+containers_running=0
+for container in "ldap" "keycloak" "python-bastion"; do
+    if docker ps --format "table {{.Names}}" | grep -q "^${container}$"; then
+        echo -e "${GREEN}✓${NC} ${container} container is running"
+        containers_running=$((containers_running + 1))
+    else
+        echo -e "${RED}✗${NC} ${container} container is not running"
+    fi
+done
+
+if [ $containers_running -ne 3 ]; then
+    echo -e "${RED}❌ Not all containers are running. Please check 'docker ps'${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}⏳ Allowing additional startup time for Windows/slower systems...${NC}"
+sleep 15
 
 # Step 1.5: Generate LDIF files and load initial data
 confirm_step "About to generate LDIF files from CSV data and load them into LDAP"

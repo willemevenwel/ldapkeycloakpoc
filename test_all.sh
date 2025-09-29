@@ -73,7 +73,7 @@ echo ""
 
 # Test 2: LDAP service accessibility
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} service...${NC}"
-ldap_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" -s base "(objectClass=*)" 2>/dev/null)
+ldap_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "dc=mycompany,dc=local" -s base "(objectClass=*)" 2>/dev/null)
 if [ $? -eq 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} service connectivity" "accessible on port 389"
 else
@@ -81,8 +81,8 @@ else
 fi
 
 # Test 3: LDAP users and groups
-users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:")
-groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")
+users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=users,dc=mycompany,dc=local" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:")
+groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=groups,dc=mycompany,dc=local" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")
 
 if [ "$users_count" -gt 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} users imported" "$users_count users found"

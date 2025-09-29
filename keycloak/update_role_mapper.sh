@@ -122,7 +122,7 @@ create_role_mapper() {
     "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper",
     "parentId": "${LDAP_ID}",
     "config": {
-        "roles.dn": ["ou=groups,dc=min,dc=io"],
+        "roles.dn": ["ou=groups,dc=mycompany,dc=local"],
         "role.name.ldap.attribute": ["cn"],
         "role.object.classes": ["posixGroup"],
         "membership.ldap.attribute": ["memberUid"],
@@ -249,7 +249,7 @@ echo -e "${YELLOW}📋 Configuration Summary:${NC}"
 echo -e "   • Realm: ${REALM}"
 echo -e "   • ${CYAN}LDAP${NC} Provider: ldap-provider-${REALM} (ID: ${LDAP_ID})"
 echo -e "   • Role Mapper: role-mapper-${REALM} (ID: ${ROLE_MAPPER_ID})"
-echo -e "   • Roles DN: ou=groups,dc=min,dc=io"
+echo -e "   • Roles DN: ou=groups,dc=mycompany,dc=local"
 echo -e "   • Pre-created Roles: admin, developer (created during realm setup)"
 echo -e "   • Auto-created Roles: Will be created from LDAP group names during sync"
 echo -e "   • LDAP Filter: Groups (admins, developers, ds1, ds2, ds3, user)"

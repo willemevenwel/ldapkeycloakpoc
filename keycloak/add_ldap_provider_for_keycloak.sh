@@ -137,9 +137,9 @@ create_ldap_provider() {
         "uuidLDAPAttribute": ["entryUUID"],
         "userObjectClasses": ["inetOrgPerson"],
         "connectionUrl": ["ldap://ldap:389"],
-        "usersDn": ["ou=users,dc=min,dc=io"],
+        "usersDn": ["ou=users,dc=mycompany,dc=local"],
         "authType": ["simple"],
-        "bindDn": ["cn=admin,dc=min,dc=io"],
+        "bindDn": ["cn=admin,dc=mycompany,dc=local"],
         "bindCredential": ["admin"],
         "searchScope": ["1"],
         "validatePasswordPolicy": ["false"],
@@ -201,7 +201,7 @@ create_group_mapper() {
     "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper",
     "parentId": "${LDAP_ID}",
     "config": {
-        "groups.dn": ["ou=groups,dc=min,dc=io"],
+        "groups.dn": ["ou=groups,dc=mycompany,dc=local"],
         "group.name.ldap.attribute": ["cn"],
         "group.object.classes": ["posixGroup"],
         "preserve.group.inheritance": ["false"],
@@ -285,8 +285,8 @@ echo -e "   • Realm: ${REALM}"
 echo -e "   • ${CYAN}LDAP${NC} Provider     : ldap-provider-${REALM} (ID: ${LDAP_ID})"
 echo -e "   • ${CYAN}LDAP${NC} Provider url : ${BLUE}${KEYCLOAK_URL}/admin/master/console/#/mirai/user-federation/ldap/${LDAP_ID}${NC}"
 echo -e "   • ${CYAN}LDAP${NC} Server       : ${CYAN}ldap://ldap:389${NC}"
-echo -e "   • Users DN       : ou=users,dc=min,dc=io"
-echo -e "   • Groups DN      : ou=groups,dc=min,dc=io"
+echo -e "   • Users DN       : ou=users,dc=mycompany,dc=local"
+echo -e "   • Groups DN      : ou=groups,dc=mycompany,dc=local"
 echo -e "   • Groups Filter  : Syncing all groups: admins, developers, ds1, ds2, ds3, user"
 echo -e "   • Edit Mode      : READ_ONLY"
 echo -e "   • Role Mapper    : Will be created by update_role_mapper.sh"
