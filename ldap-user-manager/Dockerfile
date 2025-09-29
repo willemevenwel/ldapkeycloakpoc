@@ -12,7 +12,7 @@ RUN apt-get update && \
 
 RUN docker-php-ext-configure gd --with-freetype && \
     docker-php-ext-install -j$(nproc) gd && \
-    docker-php-ext-configure ldap --with-libdir=lib/aarch64-linux-gnu && \
+    docker-php-ext-configure ldap && \
     docker-php-ext-install -j$(nproc) ldap
 
 RUN wget --no-check-certificate -O /tmp/v6.10.0.tar.gz https://github.com/PHPMailer/PHPMailer/archive/refs/tags/v6.10.0.tar.gz
