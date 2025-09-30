@@ -2,7 +2,21 @@
 
 ## Common Windows Issues and Solutions
 
-### 1. LDAP Authentication Fails (Error 49: Invalid Credentials)
+### 1. LDAP Import File Path Issues
+
+**Symptoms:**
+- `C:/Users/.../file.ldif: No such file or directory` errors
+- LDAP files copy successfully but import fails
+- Admin user exists but additional users don't import
+
+**Cause:**
+- Windows Docker translates container paths to Windows paths incorrectly
+- LDAP commands look for files in wrong location
+
+**Solution:**
+This is fixed in the updated scripts. The `ldap_exec_safe` function now properly handles container file paths.
+
+### 2. LDAP Authentication Fails (Error 49: Invalid Credentials)
 
 **Symptoms:**
 - `ldap_bind: Invalid credentials (49)` error
@@ -18,8 +32,15 @@
 
 #### Quick Fix:
 ```bash
-# Run the enhanced test script with debug mode first
+# Run the comprehensive test script with debug mode first
 ./test_all.sh your-realm-name --debug
+
+# This will show:
+# - Platform detection (Windows vs macOS vs Linux)
+# - LDAP connectivity and file path handling
+# - Container communication status
+# - User/group import validation
+# - Keycloak integration status
 
 # If setup is still failing, try regenerating and reloading data
 docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
@@ -160,7 +181,33 @@ curl http://localhost:8090
 curl -I http://localhost:389  # Should connection refuse (expected for HTTP on LDAP port)
 ```
 
-### 7. Performance Issues
+### 7. Unicode Character Display Issues
+
+**Symptoms:**
+- Bullet points show as `ΓÇó` or similar garbled characters
+- Output formatting looks corrupted in Windows terminal
+- Scripts work but display is ugly
+
+**Cause:**
+- Windows Command Prompt/PowerShell UTF-8 handling
+- Terminal encoding differences
+
+**Solutions:**
+
+#### Use Git Bash (Recommended):
+Git Bash handles Unicode better than Command Prompt.
+
+#### Enable UTF-8 in Command Prompt:
+```cmd
+chcp 65001
+```
+
+#### Use Windows Terminal:
+Windows Terminal has better Unicode support than legacy Command Prompt.
+
+**Note:** The scripts have been updated to use ASCII characters (`-`) instead of Unicode bullets (`•`) for better Windows compatibility.
+
+### 8. Performance Issues
 
 **Symptoms:**
 - Very slow container startup
@@ -228,7 +275,37 @@ find . -name "*.sh" -exec chmod +x {} \;
 docker-compose down -v
 docker system prune -f
 docker volume prune -f
+
+# On Windows, you might need to restart Docker Desktop
+# Then run:
 ./start_all.sh your-realm-name
+```
+
+### 5. Windows-Specific Keycloak Sync Issues
+
+**Symptoms:**
+- `❌ Role sync failed (HTTP 400) {"errorMessage":"NameNotFound"}`
+- `❌ User sync failed (HTTP 400) {"errorMessage":"NameNotFound"}`
+- Keycloak can't find LDAP users/groups
+
+**Cause:**
+- LDAP import failed due to file path issues
+- No users/groups exist in LDAP for Keycloak to sync
+
+**Solution:**
+```bash
+# 1. Verify LDAP data exists
+./test_all.sh your-realm-name --debug
+
+# 2. If no users/groups found, reimport data
+docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
+./ldap/setup_ldap_data.sh
+
+# 3. Load additional users
+./ldap/load_additional_users.sh your-realm-name
+
+# 4. Retry Keycloak sync
+cd keycloak && ./sync_ldap.sh your-realm-name
 ```
 
 ## Getting Help

@@ -225,7 +225,7 @@ list_roles() {
         -H "Content-Type: application/json")
     
     if [ "$(echo "$ROLES" | jq '. | length')" -gt 0 ]; then
-        echo "$ROLES" | jq -r '.[] | "   • " + .name + " (ID: " + .id + ")"'
+        echo "$ROLES" | jq -r '.[] | "   - " + .name + " (ID: " + .id + ")"'
     else
         echo -e "${YELLOW}   No roles found${NC}"
     fi

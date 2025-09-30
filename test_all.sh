@@ -156,8 +156,12 @@ else
 fi
 
 # Count users and groups
-users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:" || echo 0)
-groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:" || echo 0)
+users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:" 2>/dev/null || echo 0)
+groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:" 2>/dev/null || echo 0)
+
+# Clean up any newlines from the counts
+users_count=$(echo "$users_count" | tr -d '\n\r')
+groups_count=$(echo "$groups_count" | tr -d '\n\r')
 
 if [ "$users_count" -gt 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} users imported" "$users_count users found"

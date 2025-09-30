@@ -81,6 +81,7 @@ This project now includes enhanced cross-platform support for Windows, macOS, an
 ### Platform-Specific Features:
 - **Enhanced test script**: `./test_all.sh --debug` - Comprehensive diagnostics with detailed logging
 - **Windows troubleshooting guide**: `WINDOWS_TROUBLESHOOTING.md` - Complete Windows setup guide
+- **Cross-platform validation**: Automatic platform detection and Windows-specific recommendations
 
 ### Cross-Platform Support 🚀
 

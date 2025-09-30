@@ -1,1 +1,4 @@
 ldif/*.ldif
+temp
+temp/
+temp/*

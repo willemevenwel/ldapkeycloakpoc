@@ -127,10 +127,11 @@ echo -e "🔄 Adding new users and groups to ${CYAN}LDAP${NC}..."
 
 # Function to execute LDAP commands (with proper exit code handling)
 ldap_exec_safe() {
-    local command_args="$@"
+    local ldap_command="$1"
+    local ldap_file="$2"
     
-    echo -e "Executing: docker exec ldap $command_args"
-    docker exec ldap $command_args
+    echo -e "Executing: docker exec ldap $ldap_command -f $ldap_file"
+    docker exec ldap $ldap_command -f "$ldap_file"
     local exit_code=$?
     
     # Handle LDAP-specific exit codes
@@ -155,12 +156,12 @@ ldap_exec_safe() {
 }
 
 # Add new users and groups (ignore errors for existing entries)
-ldap_exec_safe ldapadd -x -D "cn=admin,dc=min,dc=io" -w admin -f /tmp/users.ldif -c
+ldap_exec_safe "ldapadd -x -D cn=admin,dc=min,dc=io -w admin -c" "/tmp/users.ldif"
 
 # Update existing group memberships if modify file exists
 if [ -f "ldif/group_assign.ldif" ]; then
     echo "👥 Updating existing group memberships..."
-    ldap_exec_safe ldapmodify -x -D "cn=admin,dc=min,dc=io" -w admin -f /tmp/group_assign.ldif -c
+    ldap_exec_safe "ldapmodify -x -D cn=admin,dc=min,dc=io -w admin -c" "/tmp/group_assign.ldif"
 fi
 
 # Verify the import was successful

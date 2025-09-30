@@ -136,7 +136,7 @@ sync_roles() {
         echo -e "${YELLOW}   Available mappers:${NC}"
         curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/components?parent=${LDAP_ID}&type=org.keycloak.storage.ldap.mappers.LDAPStorageMapper" \
             -H "Authorization: Bearer ${TOKEN}" \
-            -H "Content-Type: application/json" | jq -r '.[] | "   • " + .name + " (ID: " + .id + ")"'
+            -H "Content-Type: application/json" | jq -r '.[] | "   - " + .name + " (ID: " + .id + ")"'
     fi
 }
 
@@ -148,7 +148,7 @@ list_roles() {
         -H "Content-Type: application/json")
     
     if [ "$(echo "$ROLES" | jq '. | length')" -gt 0 ]; then
-        echo "$ROLES" | jq -r '.[] | "   • " + .name + " (ID: " + .id + ")"'
+        echo "$ROLES" | jq -r '.[] | "   - " + .name + " (ID: " + .id + ")"'
     else
         echo -e "${YELLOW}   No roles found${NC}"
     fi
