@@ -283,25 +283,111 @@ docker volume prune -f
 
 ### 5. Windows-Specific Keycloak Sync Issues
 
-**Symptoms:**
+#### A. "NameNotFound" Error During LDAP Sync
+
+**Exact Error Symptoms:**
+```
+✅ Role mapper found (ID: 92610ee1-266c-42af-b63a-44e522124db6)
+   • Roles DN: ou=groups,dc=min,dc=io
+   • Roles Filter: (|(cn=admins)(cn=developers)(cn=ds1)(cn=ds2)(cn=ds3)(cn=user))
+   • Mode: READ_ONLY
+🔄 Syncing users from LDAP...
+❌ User sync failed (HTTP 400)
+{"errorMessage":"NameNotFound"}🔄 Syncing roles from LDAP...
+❌ Role sync failed (HTTP 400)
+```
+
+**Root Cause:**
+This error occurs when Keycloak tries to sync users/groups from LDAP but the LDAP directory structure is empty or incomplete. On Windows, this commonly happens due to:
+1. LDAP data import failed due to file path translation issues
+2. CSV to LDIF conversion completed but LDAP import was skipped
+3. LDAP server restarted without data persistence
+
+**Step-by-Step Resolution:**
+
+**Step 1: Verify LDAP Data Exists**
+```bash
+# Check if LDAP has any users
+./test_all.sh your-realm-name --debug
+```
+
+Look for output like:
+```
+LDAP Users found: 0
+LDAP Groups found: 0
+```
+
+If both are 0, the LDAP directory is empty.
+
+**Step 2: Manually Verify LDAP Directory Structure**
+```bash
+# Test LDAP connection and check base DN
+docker exec ldap ldapsearch -x -b "dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=*)" dn
+
+# Check if users OU exists
+docker exec ldap ldapsearch -x -b "ou=users,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=*)" dn
+
+# Check if groups OU exists  
+docker exec ldap ldapsearch -x -b "ou=groups,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=*)" dn
+```
+
+**Step 3: Regenerate and Import LDAP Data**
+```bash
+# Stop containers to reset state
+docker-compose stop
+
+# Remove any partial data
+docker-compose down
+
+# Start containers fresh
+docker-compose up -d
+
+# Wait for containers to be ready
+sleep 30
+
+# Regenerate LDIF files (Windows path-safe)
+docker exec python-bastion python python/csv_to_ldif.py
+
+# Check if LDIF files exist and have content
+docker exec python-bastion ls -la ldif/
+docker exec python-bastion head -20 ldif/users.ldif
+
+# Re-import LDAP data with verbose output
+./ldap/setup_ldap_data.sh
+```
+
+**Step 4: Verify Data Import Success**
+```bash
+# Check users count
+docker exec ldap ldapsearch -x -b "ou=users,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=inetOrgPerson)" | grep "dn:" | wc -l
+
+# Check groups count
+docker exec ldap ldapsearch -x -b "ou=groups,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=posixGroup)" | grep "dn:" | wc -l
+```
+
+**Step 5: Re-run Keycloak LDAP Sync**
+```bash
+cd keycloak
+./sync_ldap.sh your-realm-name
+```
+
+#### B. General Windows Keycloak Sync Issues
+
+**Other Common Symptoms:**
 - `❌ Role sync failed (HTTP 400) {"errorMessage":"NameNotFound"}`
 - `❌ User sync failed (HTTP 400) {"errorMessage":"NameNotFound"}`
 - Keycloak can't find LDAP users/groups
 
-**Cause:**
-- LDAP import failed due to file path issues
-- No users/groups exist in LDAP for Keycloak to sync
-
-**Solution:**
+**General Solutions:**
 ```bash
 # 1. Verify LDAP data exists
 ./test_all.sh your-realm-name --debug
 
 # 2. If no users/groups found, reimport data
-docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
+docker exec python-bastion python python/csv_to_ldif.py
 ./ldap/setup_ldap_data.sh
 
-# 3. Load additional users
+# 3. Load additional users if needed
 ./ldap/load_additional_users.sh your-realm-name
 
 # 4. Retry Keycloak sync
