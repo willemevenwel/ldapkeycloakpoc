@@ -1,0 +1,341 @@
+✅ Services started successfully
+⏳ Waiting for services to fully initialize...
+Checking service readiness...
+✓ ldap container is running
+✓ keycloak container is running
+✓ python-bastion container is running
+⏳ Allowing startup time for services to initialize...
+This ensures compatibility across macOS, Windows, and slower systems
+Startup check 1/6...
+✓ LDAP service is responding
+🔄 Step 1.5: Generating LDIF files and loading initial data...
+📝 Generating LDIF from CSV files using containerized Python...
+Known admin users: admin
+Auto-detected mode: 'admins' (filename suggests admin users)
+Using CSV file: data/admins.csv
+Output files: /opt/output/admins_only.ldif, /opt/output/users.ldif, /opt/output/group_assign.ldif
+Admin users identified: admin
+Admins processed: ['admin']
+Users processed: []
+LDIF files generated: /opt/output/admins_only.ldif, /opt/output/users.ldif, /opt/output/group_assign.ldif
+✓ LDIF generation completed
+🔍 Validating generated LDIF files...
+✓ admins_only.ldif exists with 1 users and 1 groups
+📥 Loading admin users into LDAP...
+Setting up LDAP initial data...
+Waiting for LDAP server to be ready...
+LDAP container is running, checking LDAP service availability...
+LDAP server is ready!
+Importing LDIF data...
+Copying and importing admin users...
+Successfully copied 2.05kB to ldap:/tmp/admins_only.ldif
+Importing admin LDIF...
+C:/Users/wevenwel/AppData/Local/Temp/admins_only.ldif: No such file or directory
+⚠️  LDIF import had warnings (possibly duplicate entries)
+Validating admin user creation...
+✓ Admin user 'admin' found in LDAP
+Validating admin group creation...
+✓ Admin group 'admins' found in LDAP
+✅ Admin import completed and validated successfully!
+LDAP initial data setup completed!
+✅ Initial LDAP data loaded and validated successfully
+
+🔄 Step 2: Creating Keycloak realm 'acme'...
+🏗️  Creating  Keycloak Realm: acme
+🚀 Starting realm creation process...
+⏳ Waiting for Keycloak to be ready...
+.........✅ Keycloak is ready!
+🔑 Getting master admin token...
+✅ Got master admin token
+🔍 Checking if realm 'acme' already exists...
+🏗️  Creating realm 'acme'...
+✅ Created realm 'acme'
+👤 Creating realm admin user 'admin-acme'...
+✅ Created user 'admin-acme'
+🔍 Getting user ID for 'admin-acme'...
+✅ Got user ID: b76cf0fe-fc1e-4685-ab68-9e83135ae977
+🏗️  Creating anticipated realm roles (expected from LDAP groups)...
+💡 These roles are created in anticipation of LDAP groups that will map to them
+   Future LDAP groups can be mapped to these pre-defined role names
+   To add more anticipated roles, modify REALM_ROLES_TO_CREATE array above
+
+   Creating anticipated role: admins (expected from LDAP group mapping)
+   ✅ Created anticipated role: admins
+   Creating anticipated role: developers (expected from LDAP group mapping)
+   ✅ Created anticipated role: developers
+📝 Note: Additional roles will be auto-created by LDAP mapper for groups not listed above
+
+👑 Assigning realm admin roles to 'admin-acme'...
+✅ Assigned realm admin roles
+🧪 Testing realm admin login...
+✅ Realm admin login successful
+🎉 Realm creation completed successfully!
+📋 Configuration Summary:
+   • Realm Name      : acme
+   • Admin Username  : admin-acme
+   • Admin Password  : admin-acme
+   • Admin Email     : admin-acme@acme.local
+
+🌐 Access URLs:
+   • Realm URL       : http://localhost:8090/realms/acme
+   • Admin Console   : http://localhost:8090/admin/acme/console/
+   • Account Console : http://localhost:8090/realms/acme/account/
+
+💡 You can now use this realm for further configuration!
+✅ Realm 'acme' created successfully
+
+🔄 Step 3: Adding LDAP provider...
+🔧 Configuring Keycloak LDAP Provider for realm: acme
+🚀 Starting Keycloak LDAP configuration...
+⏳ Waiting for Keycloak and realm 'acme' to be ready...
+✅ Keycloak and realm 'acme' are ready!
+🔑 Getting admin token for 'admin-acme'...
+✅ Got admin token for realm 'acme'
+🔍 Getting realm ID...
+✅ Got realm ID: 65172724-852a-479e-ad3f-833ba77cbe49
+🔍 Checking if LDAP provider already exists...
+🏗️  Creating  LDAP provider...
+✅ Created LDAP provider (ID: yBFiOY_rQ-iYBqzuAGILZQ)
+🔍 Verifying LDAP provider was created...
+✅ LDAP provider verified:
+   • ID: yBFiOY_rQ-iYBqzuAGILZQ
+   • Name: ldap-provider-acme
+   • Type: org.keycloak.storage.UserStorageProvider
+   • Parent Realm ID: 65172724-852a-479e-ad3f-833ba77cbe49
+✅ Parent ID correctly set to realm UUID
+🎉 Keycloak LDAP configuration completed successfully!
+🔍 LDAP provider created with ID: yBFiOY_rQ-iYBqzuAGILZQ
+📋 Configuration Summary:
+   • Realm: acme
+   • LDAP Provider     : ldap-provider-acme (ID: yBFiOY_rQ-iYBqzuAGILZQ)
+   • LDAP Provider url : http://localhost:8090/admin/master/console/#/mirai/user-federation/ldap/yBFiOY_rQ-iYBqzuAGILZQ
+   • LDAP Server       : ldap://ldap:389
+   • Users DN       : ou=users,dc=min,dc=io
+   • Groups DN      : ou=groups,dc=min,dc=io
+   • Groups Filter  : Syncing all groups: admins, developers, ds1, ds2, ds3, user
+   • Edit Mode      : READ_ONLY
+   • Role Mapper    : Will be created by update_role_mapper.sh
+   • Authentication : Realm Admin
+
+🌐 Access URLs:
+   • Realm URL       : http://localhost:8090/realms/acme
+   • Admin Console   : http://localhost:8090/admin/acme/console/
+   • User Federation : http://localhost:8090/admin/acme/console/#/acme/user-federation
+
+🔑 Admin credentials:
+   • Realm Admin: admin-acme/admin-acme
+
+💡 The LDAP provider should now appear in:
+   User Federation → ldap-provider-acme
+   If it doesn't appear immediately, try:
+   1. Refreshing the page (Ctrl+F5)
+   2. Clearing browser cache
+   3. Logging out and back in to Keycloak
+
+🔧 To debug further, run: ./debug_ldap_provider.sh acme
+
+➡️  Next steps:
+   1. Create role mapper: ./update_role_mapper.sh acme
+   2. Sync users and roles: ./sync_ldap.sh acme
+✅ LDAP provider added successfully
+
+ 🔄 Step 4: Creating role mapper for LDAP groups...
+🔧 Creating/Updating LDAP Role Mapper for realm: acme
+🚀 Starting LDAP role mapper configuration...
+⏳ Waiting for Keycloak and realm 'acme' to be ready...
+✅ Keycloak and realm 'acme' are ready!
+🔑 Getting admin token for 'admin-acme'...
+✅ Got admin token for realm 'acme'
+🔍 Finding LDAP provider...
+✅ Found LDAP provider (ID: yBFiOY_rQ-iYBqzuAGILZQ)
+🔍 Checking if role mapper already exists...
+🏗️  Creating  LDAP role mapper...
+✅ Created role mapper (ID: b4f75d6b-c019-4082-8f9f-ace916fd3792)
+🔄 Syncing roles from LDAP...
+❌ Role sync failed (HTTP 400)
+{"errorMessage":"NameNotFound"}🔍 Verifying role mapper...
+✅ Role mapper verified:
+   • ID: b4f75d6b-c019-4082-8f9f-ace916fd3792
+   • Name: role-mapper-acme
+   • Type: role-ldap-mapper
+   • Roles DN: ou=groups,dc=min,dc=io
+   • Roles Filter: (|(cn=admins)(cn=developers)(cn=ds1)(cn=ds2)(cn=ds3)(cn=user))
+📋 Current realm roles in Keycloak:
+   ΓÇó default-roles-acme (ID: bcf16c78-21df-499d-8387-b40b1c7e5ee1)
+   ΓÇó uma_authorization (ID: e5137ee4-ed8d-44e4-9f41-d10ee856bb7a)
+   ΓÇó developers (ID: 81fa2f4e-3b90-4fe8-973d-abe59d420737)
+   ΓÇó offline_access (ID: bbd5ca90-d194-4f3c-9c52-e3ef83cdc00f)
+   ΓÇó admins (ID: 8b7ff29e-6429-41fa-bb81-0fe467deb8e3)
+🎉 LDAP role mapper configuration completed successfully!
+📋 Configuration Summary:
+   • Realm: acme
+   • LDAP Provider: ldap-provider-acme (ID: yBFiOY_rQ-iYBqzuAGILZQ)
+   • Role Mapper: role-mapper-acme (ID: b4f75d6b-c019-4082-8f9f-ace916fd3792)
+   • Roles DN: ou=groups,dc=min,dc=io
+   • Pre-created Roles: admin, developer (created during realm setup)
+   • Auto-created Roles: Will be created from LDAP group names during sync
+   • LDAP Filter: Groups (admins, developers, ds1, ds2, ds3, user)
+   • Mode: READ_ONLY
+   • Mapping Type: Realm Roles (mix of pre-created and auto-created)
+
+🌐 Access URLs:
+   • Role Mapper Config: http://localhost:8090/admin/acme/console/#/acme/user-federation/ldap/yBFiOY_rQ-iYBqzuAGILZQ/mappers/b4f75d6b-c019-4082-8f9f-ace916fd3792
+   • Realm Roles: http://localhost:8090/admin/acme/console/#/acme/roles
+
+💡 Role Mapping Strategy:
+   • Pre-created roles (clean names):
+     - LDAP Group 'admins' → Realm Role 'admin' (pre-created)
+     - LDAP Group 'developers' → Realm Role 'developer' (pre-created)
+   • Auto-created roles (LDAP group names):
+     - LDAP Group 'ds1' → Realm Role 'ds1' (auto-created)
+     - LDAP Group 'ds2' → Realm Role 'ds2' (auto-created)
+     - LDAP Group 'ds3' → Realm Role 'ds3' (auto-created)
+     - LDAP Group 'user' → Realm Role 'user' (auto-created)
+   📝 To add more pre-created roles, modify REALM_ROLES_TO_CREATE in the script
+
+🔧 To test role mappings:
+   1. Log in with an LDAP user
+   2. Check user's roles in the admin console
+   3. Verify role assignments match LDAP group memberships
+
+➡️  Next steps:
+   • Test user login to verify role mappings
+   • Configure application-specific role mappings if needed
+   • Run user sync to ensure all role mappings are applied:
+     ./sync_ldap.sh acme
+✅ Role mapper created successfully
+
+🔄 Step 5: Syncing users and roles from LDAP...
+🔄 Syncing LDAP Users and Roles for realm: acme
+🚀 Starting complete LDAP sync for realm: acme
+🔑 Getting admin token for 'admin-acme'...
+✅ Got admin token for realm 'acme'
+🔍 Finding LDAP provider...
+✅ Found LDAP provider (ID: yBFiOY_rQ-iYBqzuAGILZQ)
+🔍 Verifying role mapper configuration...
+✅ Role mapper found (ID: b4f75d6b-c019-4082-8f9f-ace916fd3792)
+   • Roles DN: ou=groups,dc=min,dc=io
+   • Roles Filter: (|(cn=admins)(cn=developers)(cn=ds1)(cn=ds2)(cn=ds3)(cn=user))
+   • Mode: READ_ONLY
+🔄 Syncing users from LDAP...
+❌ User sync failed (HTTP 400)
+{"errorMessage":"NameNotFound"}🔄 Syncing roles from LDAP...
+❌ Role sync failed (HTTP 400)
+{"errorMessage":"NameNotFound"}📋 Current realm roles in Keycloak:
+   ΓÇó default-roles-acme (ID: bcf16c78-21df-499d-8387-b40b1c7e5ee1)
+   ΓÇó uma_authorization (ID: e5137ee4-ed8d-44e4-9f41-d10ee856bb7a)
+   ΓÇó developers (ID: 81fa2f4e-3b90-4fe8-973d-abe59d420737)
+   ΓÇó offline_access (ID: bbd5ca90-d194-4f3c-9c52-e3ef83cdc00f)
+   ΓÇó admins (ID: 8b7ff29e-6429-41fa-bb81-0fe467deb8e3)
+🎉 Complete LDAP sync completed!
+
+💡 If users or roles are not appearing, try:
+   1. Check the LDAP filter in the role mapper
+   2. Verify LDAP connectivity
+   3. Check LDAP group structure
+   4. Refresh the Keycloak admin console
+   5. Re-run this sync script
+✅ Users and roles synced successfully
+
+🎉 Complete setup finished successfully!
+
+📋 Setup Summary for realm 'acme':
+   • All Docker services are running
+   • LDAP server populated with users and groups
+   • Keycloak realm 'acme' created
+   • LDAP provider 'ldap-provider-acme' configured
+   • Role mapper 'role-mapper-acme' configured
+   • Users and roles synced from LDAP to Keycloak
+
+🌐 Access your setup:
+   • Keycloak Admin     : http://localhost:8090/admin/acme/console/
+   • Realm URL          : http://localhost:8090/realms/acme
+   • LDAP Web Manager   : http://localhost:8091
+
+🔑 Admin credentials:
+   • Keycloak Realm Admin: admin-acme / admin-acme
+   • Keycloak Master Admin: admin / admin
+   • LDAP Server (protocol): cn=admin,dc=min,dc=io / admin
+   • LDAP Web Manager (web UI): admin / admin
+
+💡 Expected roles created: admin, developer, ds_member, user
+💡 Expected users synced: admin, alice, bob, charlie, willem, jp, louis, razvan, jack, andre, anwar
+
+🔄 To sync again later, run: cd keycloak && ./sync_ldap.sh acme
+
+📖 Usage examples:
+   ./start_all.sh my-realm                    # Full automated setup
+   ./start_all.sh my-realm --check-steps      # Interactive mode with confirmations
+   ./start_all.sh --check-steps               # Interactive mode, will prompt for realm name
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Optional: Load additional users and group assignments into LDAP
+   This will import additional data from users.ldif and group_assign.ldif
+   Run this if you want to add more test users beyond the basic setup
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Do you want to load additional users now? (y/N - default is No): y
+🔄 Loading additional users into LDAP...
+⏳ Waiting for LDAP container to be fully ready...
+✅ LDAP container is ready and responding
+✅ LDAP containers are running
+📝 Generating LDIF for additional users using containerized Python...
+Known admin users: admin
+Auto-detected mode: 'additional' (filename suggests additional users)
+⚠️🗑️  Deleting old LDIF file: /opt/output/admins_only.ldif
+⚠️🗑️  Deleting old LDIF file: /opt/output/users.ldif
+⚠️🗑️  Deleting old LDIF file: /opt/output/group_assign.ldif
+Using CSV file: data/users.csv
+Output files: /opt/output/admins_only.ldif, /opt/output/users.ldif, /opt/output/group_assign.ldif
+Admin users identified: admin
+Admins processed: []
+Users processed: ['alice', 'bob', 'charlie', 'willem', 'louis', 'jack', 'razvan', 'andre', 'jp', 'anwar']
+LDIF files generated: /opt/output/admins_only.ldif, /opt/output/users.ldif, /opt/output/group_assign.ldif
+📋 Additional users LDIF content preview:
+========================================
+dn: uid=alice,ou=users,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Alice Smith
+sn: Smith
+givenName: Alice
+mail: alice@mycompany.local
+uid: alice
+userPassword: {SHA}8L0lGwgzjCMNQg8zEG+vE6EsrOU=
+
+dn: uid=bob,ou=users,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Bob Johnson
+sn: Johnson
+givenName: Bob
+mail: bob@mycompany.local
+uid: bob
+userPassword: {SHA}CkK2udzVafmQ3N5A9P9zxaJOuQQ=
+
+dn: uid=charlie,ou=users,dc=min,dc=io
+objectClass: inetOrgPerson
+========================================
+📥 Copying LDIF files to LDAP container...
+Successfully copied 4.61kB to ldap:/tmp/users.ldif
+Successfully copied 2.56kB to ldap:/tmp/group_assign.ldif
+🔄 Adding new users and groups to LDAP...
+Executing: docker exec ldap ldapadd -x -D cn=admin,dc=min,dc=io -w admin -f /tmp/users.ldif -c
+C:/Users/wevenwel/AppData/Local/Temp/users.ldif: No such file or directory
+❌ LDAP command failed with exit code 1
+👥 Updating existing group memberships...
+Executing: docker exec ldap ldapmodify -x -D cn=admin,dc=min,dc=io -w admin -f /tmp/group_assign.ldif -c
+C:/Users/wevenwel/AppData/Local/Temp/group_assign.ldif: No such file or directory
+❌ LDAP command failed with exit code 1
+🔍 Verifying import...
+  Import verification:
+   • Users in LDAP:  0
+   • Groups in LDAP: 0
+⚠️  Import may not have completed fully. Expected multiple users and groups.
+
+🌐 You can now access the updated LDAP:necho -e    LDAP Protocol:            ldap://localhost:389necho -e    LDAP Web Manager:         http://localhost:8080necho -e    LDAP Web Manager Login:   admin / admin
+
+📊 To verify the import, you can run:
+   ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -b 'ou=users,dc=min,dc=io' '(objectClass=inetOrgPerson)'
+🧹 Cleanup...
+🧹 Cleanup completed
+
+✅ Additional users loaded. You may want to re-sync LDAP:
+   cd keycloak && ./sync_ldap.sh acme
