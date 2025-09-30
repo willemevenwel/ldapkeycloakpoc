@@ -25,17 +25,32 @@ fi
 
 echo "LDAP container is running, checking LDAP service availability..."
 
+# Try to connect with the correct admin DN - MinIO OpenLDAP uses cn=admin,dc=min,dc=io
 while ! docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" >/dev/null 2>&1; do
     if [ $counter -eq $timeout ]; then
         echo -e "${RED}Error: LDAP server did not respond within $timeout seconds${NC}"
         echo -e "${YELLOW}Container is running but LDAP service is not ready${NC}"
-        echo -e "${YELLOW}Try running this command manually to debug:${NC}"
+        echo -e "${YELLOW}Debugging LDAP connectivity...${NC}"
+        
+        # Try basic container connectivity
+        echo -e "${CYAN}Checking container logs:${NC}"
+        docker logs ldap --tail 10
+        
+        echo -e "${CYAN}Trying alternative connection methods:${NC}"
+        # Try without authentication first
+        if docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "" -s base >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ Basic LDAP service is responding${NC}"
+        else
+            echo -e "${RED}✗ LDAP service is not responding at all${NC}"
+        fi
+        
+        echo -e "${YELLOW}Manual debug command:${NC}"
         echo -e "${YELLOW}docker exec ldap ldapsearch -x -H ldap://localhost:389 -D \"cn=admin,dc=min,dc=io\" -w admin -b \"dc=min,dc=io\"${NC}"
         exit 1
     fi
     echo "Waiting for LDAP service... ($counter/$timeout)"
-    sleep 2
-    counter=$((counter + 2))
+    sleep 3  # Increased sleep for Windows compatibility
+    counter=$((counter + 3))
 done
 
 echo -e "${GREEN}LDAP server is ready!${NC}"
@@ -46,11 +61,43 @@ echo -e "${CYAN}Importing LDIF data...${NC}"
 if [ -f ldif/admins_only.ldif ]; then
     echo "Copying and importing admin users..."
     docker cp ldif/admins_only.ldif ldap:/tmp/admins_only.ldif
-    # Use -c flag to continue on errors (like "already exists")
-    docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -f /tmp/admins_only.ldif || true
-    echo -e "${GREEN}Admin import completed successfully!${NC}"
+    
+    # Import LDIF and capture output for debugging
+    echo -e "${CYAN}Importing admin LDIF...${NC}"
+    if docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -f /tmp/admins_only.ldif; then
+        echo -e "${GREEN}✓ Admin LDIF imported successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠️  LDIF import had warnings (possibly duplicate entries)${NC}"
+    fi
+    
+    # Validate that admin user was created
+    echo -e "${CYAN}Validating admin user creation...${NC}"
+    if docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" "(uid=admin)" uid >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Admin user 'admin' found in LDAP${NC}"
+    else
+        echo -e "${RED}✗ Admin user 'admin' not found in LDAP${NC}"
+        echo -e "${YELLOW}Debugging: Searching for all users...${NC}"
+        docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid
+        exit 1
+    fi
+    
+    # Validate that admin group was created
+    echo -e "${CYAN}Validating admin group creation...${NC}"
+    if docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" "(cn=admins)" cn >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Admin group 'admins' found in LDAP${NC}"
+    else
+        echo -e "${RED}✗ Admin group 'admins' not found in LDAP${NC}"
+        echo -e "${YELLOW}Debugging: Searching for all groups...${NC}"
+        docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✅ Admin import completed and validated successfully!${NC}"
 else
-    echo -e "${YELLOW}No admin LDIF file found to import${NC}"
+    echo -e "${RED}❌ No admin LDIF file found to import${NC}"
+    echo -e "${YELLOW}Expected file: ldif/admins_only.ldif${NC}"
+    echo -e "${YELLOW}Please ensure CSV to LDIF conversion ran successfully${NC}"
+    exit 1
 fi
 
 echo -e "${GREEN}LDAP initial data setup completed!${NC}"

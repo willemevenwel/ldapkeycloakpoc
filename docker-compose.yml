@@ -8,12 +8,22 @@ services:
       - LDAP_DOMAIN=min.io
       - LDAP_BASE_DN=dc=min,dc=io
       - LDAP_ADMIN_PASSWORD=admin
+      # Windows-specific optimizations
+      - LDAP_OPENLDAP_GID=999
+      - LDAP_OPENLDAP_UID=999
     ports:
       - "389:389"
       - "636:636"
     volumes:
       - ldap_data:/var/lib/ldap
       - ldap_config:/etc/ldap/slapd.d
+    # Health check for better container management
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost:389 -b '' -s base || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   ldap-manager:
     build: ./ldap-user-manager
@@ -42,8 +52,17 @@ services:
     environment:
       - KEYCLOAK_ADMIN=admin
       - KEYCLOAK_ADMIN_PASSWORD=admin
+      # Cross-platform JVM optimizations
+      - JAVA_OPTS=-Xmx512m -Xms256m
     ports:
       - "8090:8080"
+    # Health check for better container management
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Python utilities container for cross-platform script execution
   utils:

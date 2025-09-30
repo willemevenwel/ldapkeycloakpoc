@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # test_all.sh
-# Verification script for LDAP-Keycloak POC setup
-# Tests all compongroups_count=$(timeout 10s docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")nts configured by start_all.sh
+# Enhanced verification script for LDAP-Keycloak POC setup
+# Tests all components configured by start_all.sh with debugging capabilities
 
 # Colors for output
 RED='\033[0;31m'
@@ -13,8 +13,24 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Get realm name from parameter
-REALM_NAME="$1"
+# Parse arguments
+DEBUG_MODE=false
+REALM_NAME=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            DEBUG_MODE=true
+            shift
+            ;;
+        *)
+            if [ -z "$REALM_NAME" ]; then
+                REALM_NAME="$1"
+            fi
+            shift
+            ;;
+    esac
+done
 
 if [ -z "$REALM_NAME" ]; then
     echo -e "${BLUE}🔍 Testing LDAP-Keycloak setup (basic components)${NC}"
@@ -22,6 +38,10 @@ if [ -z "$REALM_NAME" ]; then
     echo -e "${YELLOW}   To test a specific realm, run: ./test_all.sh <realm-name>${NC}"
 else
     echo -e "${BLUE}🔍 Testing LDAP-Keycloak setup for realm: ${REALM_NAME}${NC}"
+fi
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${CYAN}🔧 Debug mode enabled - showing detailed logs and diagnostics${NC}"
 fi
 echo ""
 
@@ -79,32 +99,98 @@ ldap_container_check=$(docker exec ldap echo "Container responsive" 2>/dev/null)
 if [ $? -eq 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} container responsiveness" "container is responsive"
     
-    # Now test LDAP service connectivity
+    # Show container logs in debug mode
+    if [ "$DEBUG_MODE" = true ]; then
+        echo -e "${CYAN}📋 Recent LDAP container logs (last 10 lines):${NC}"
+        docker logs ldap --tail 10
+        echo ""
+    fi
+    
+    # Test basic LDAP service (anonymous)
+    basic_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "" -s base 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        check_result "pass" "${CYAN}LDAP${NC} basic service" "responding to anonymous queries"
+    else
+        check_result "fail" "${CYAN}LDAP${NC} basic service" "not responding"
+    fi
+    
+    # Now test LDAP service connectivity with admin credentials
     ldap_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" -s base "(objectClass=*)" 2>/dev/null)
     if [ $? -eq 0 ]; then
-        check_result "pass" "${CYAN}LDAP${NC} service connectivity" "accessible on port 389"
+        check_result "pass" "${CYAN}LDAP${NC} admin authentication" "cn=admin,dc=min,dc=io credentials work"
+        
+        # Check base DN structure in debug mode
+        if [ "$DEBUG_MODE" = true ]; then
+            echo -e "${CYAN}📋 Base DN structure:${NC}"
+            docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" -s base "(objectClass=*)"
+            echo ""
+        fi
     else
-        check_result "fail" "${CYAN}LDAP${NC} service connectivity" "not accessible or timed out"
+        check_result "fail" "${CYAN}LDAP${NC} admin authentication" "authentication failed"
         echo -e "${YELLOW}   💡 Try waiting longer for LDAP to fully initialize${NC}"
+        if [ "$DEBUG_MODE" = true ]; then
+            echo -e "${YELLOW}   🔧 Debug: Try manual test with:${NC}"
+            echo -e "${YELLOW}      docker exec ldap ldapsearch -x -H ldap://localhost:389 -D \"cn=admin,dc=min,dc=io\" -w admin -b \"dc=min,dc=io\"${NC}"
+        fi
     fi
 else
     check_result "fail" "${CYAN}LDAP${NC} container responsiveness" "container not responding"
 fi
 
 # Test 3: LDAP users and groups
-users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:")
-groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:")
+echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} data import...${NC}"
+
+# Check if OUs exist first
+ou_users_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" -s base "(objectClass=*)" 2>/dev/null)
+if [ $? -eq 0 ]; then
+    check_result "pass" "${CYAN}LDAP${NC} Users OU" "ou=users,dc=min,dc=io exists"
+else
+    check_result "fail" "${CYAN}LDAP${NC} Users OU" "ou=users,dc=min,dc=io not found"
+fi
+
+ou_groups_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" -s base "(objectClass=*)" 2>/dev/null)
+if [ $? -eq 0 ]; then
+    check_result "pass" "${CYAN}LDAP${NC} Groups OU" "ou=groups,dc=min,dc=io exists"
+else
+    check_result "fail" "${CYAN}LDAP${NC} Groups OU" "ou=groups,dc=min,dc=io not found"
+fi
+
+# Count users and groups
+users_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep -c "uid:" || echo 0)
+groups_count=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn 2>/dev/null | grep -c "cn:" || echo 0)
 
 if [ "$users_count" -gt 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} users imported" "$users_count users found"
+    
+    # Show user list in debug mode
+    if [ "$DEBUG_MODE" = true ]; then
+        echo -e "${CYAN}📋 Users in LDAP:${NC}"
+        docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" uid | grep "uid:" | cut -d' ' -f2
+        echo ""
+    fi
 else
     check_result "fail" "${CYAN}LDAP${NC} users imported" "no users found"
 fi
 
 if [ "$groups_count" -gt 0 ]; then
     check_result "pass" "${CYAN}LDAP${NC} groups imported" "$groups_count groups found"
+    
+    # Show group list in debug mode
+    if [ "$DEBUG_MODE" = true ]; then
+        echo -e "${CYAN}📋 Groups in LDAP:${NC}"
+        docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(objectClass=posixGroup)" cn | grep "cn:" | cut -d' ' -f2
+        echo ""
+    fi
 else
     check_result "fail" "${CYAN}LDAP${NC} groups imported" "no groups found"
+fi
+
+# Check admin user specifically
+admin_user_test=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" "(uid=admin)" uid 2>/dev/null | grep -q "uid: admin")
+if [ $? -eq 0 ]; then
+    check_result "pass" "${CYAN}LDAP${NC} admin user" "admin user found in directory"
+else
+    check_result "fail" "${CYAN}LDAP${NC} admin user" "admin user not found"
 fi
 
 echo ""
@@ -207,6 +293,35 @@ else
     check_result "fail" "LDIF files generated" "admins_only.ldif missing or empty"
 fi
 
+# Test 10: Platform-specific information
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${YELLOW}Platform and system information...${NC}"
+    
+    # Detect platform
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        check_result "pass" "Platform detection" "Windows detected"
+        echo -e "${CYAN}   💡 Windows-specific recommendations:${NC}"
+        echo -e "${CYAN}      • Ensure Docker Desktop uses Linux containers${NC}"
+        echo -e "${CYAN}      • Consider increasing Docker memory to 4GB+${NC}"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        check_result "pass" "Platform detection" "macOS detected"
+        echo -e "${CYAN}   💡 macOS works well with Docker Desktop${NC}"
+    else
+        check_result "pass" "Platform detection" "Linux detected"
+        echo -e "${CYAN}   💡 Native Docker should work optimally${NC}"
+    fi
+    
+    # Show Docker version
+    docker_version=$(docker --version 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        check_result "pass" "Docker version" "$docker_version"
+    else
+        check_result "fail" "Docker version" "Docker not accessible"
+    fi
+    
+    echo ""
+fi
+
 echo ""
 echo -e "${BLUE}🎯 Test Summary Complete${NC}"
 if [ -n "$REALM_NAME" ]; then
@@ -220,4 +335,18 @@ else
     echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${CYAN}http://localhost:8080${NC}"
     echo ""
     echo -e "${YELLOW}💡 To test a specific realm, run: ./test_all.sh <realm-name>${NC}"
+    echo -e "${YELLOW}💡 For detailed diagnostics, run: ./test_all.sh <realm-name> --debug${NC}"
+fi
+
+if [ -n "$REALM_NAME" ]; then
+    echo -e "${YELLOW}💡 For detailed diagnostics, run: ./test_all.sh ${REALM_NAME} --debug${NC}"
+fi
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo ""
+    echo -e "${CYAN}🔧 Quick troubleshooting commands:${NC}"
+    echo -e "${CYAN}   • Restart LDAP: docker restart ldap${NC}"
+    echo -e "${CYAN}   • Check logs: docker logs ldap${NC}"
+    echo -e "${CYAN}   • Regenerate LDIF: docker exec python-bastion python python/csv_to_ldif.py data/admins.csv${NC}"
+    echo -e "${CYAN}   • Full restart: docker-compose down && docker-compose up -d${NC}"
 fi

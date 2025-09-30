@@ -68,6 +68,20 @@ ldapkeycloakpoc/
 - Docker and Docker Compose
 - LDAP client tools (optional, for testing): `brew install openldap` on macOS
 
+## Cross-Platform Compatibility 🌍
+
+This project now includes enhanced cross-platform support for Windows, macOS, and Linux environments.
+
+### Windows Support ✅
+- **Enhanced startup timing** for Windows Docker environments
+- **Robust service readiness checks** to handle slower initialization
+- **Detailed error diagnostics** for troubleshooting Windows-specific issues
+- **Comprehensive Windows troubleshooting guide**: See `WINDOWS_TROUBLESHOOTING.md`
+
+### Platform-Specific Features:
+- **Enhanced test script**: `./test_all.sh --debug` - Comprehensive diagnostics with detailed logging
+- **Windows troubleshooting guide**: `WINDOWS_TROUBLESHOOTING.md` - Complete Windows setup guide
+
 ### Cross-Platform Support 🚀
 
 **All Python execution is now containerized!** No need to install Python locally on any platform.

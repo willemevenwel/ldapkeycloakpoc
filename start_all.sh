@@ -92,39 +92,91 @@ check_success
 echo -e "${GREEN}✅ Services started successfully${NC}"
 echo -e "${YELLOW}⏳ Waiting for services to fully initialize...${NC}"
 
-# More robust wait for Windows/slower systems
+# Cross-platform robust service readiness check
 echo -e "${CYAN}Checking service readiness...${NC}"
 sleep 5
 
 # Check if containers are actually running
 containers_running=0
-for container in "ldap" "keycloak" "python-bastion"; do
+expected_containers=("ldap" "keycloak" "python-bastion")
+for container in "${expected_containers[@]}"; do
     if docker ps --format "table {{.Names}}" | grep -q "^${container}$"; then
         echo -e "${GREEN}✓${NC} ${container} container is running"
         containers_running=$((containers_running + 1))
     else
         echo -e "${RED}✗${NC} ${container} container is not running"
+        echo -e "${YELLOW}  Checking container status...${NC}"
+        docker ps -a --filter "name=${container}" --format "table {{.Names}}\t{{.Status}}"
     fi
 done
 
-if [ $containers_running -ne 3 ]; then
+if [ $containers_running -ne ${#expected_containers[@]} ]; then
     echo -e "${RED}❌ Not all containers are running. Please check 'docker ps'${NC}"
+    echo -e "${YELLOW}Expected: ${expected_containers[*]}${NC}"
     exit 1
 fi
 
-echo -e "${YELLOW}⏳ Allowing additional startup time for Windows/slower systems...${NC}"
-sleep 15
+# Enhanced startup time for cross-platform compatibility
+echo -e "${YELLOW}⏳ Allowing startup time for services to initialize...${NC}"
+echo -e "${CYAN}This ensures compatibility across macOS, Windows, and slower systems${NC}"
+
+# Progressive wait with service checks
+for i in {1..6}; do
+    echo -e "${CYAN}Startup check $i/6...${NC}"
+    sleep 5
+    
+    # Check if LDAP is responding (basic connectivity test)
+    if docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "" -s base >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ LDAP service is responding${NC}"
+        break
+    else
+        echo -e "${YELLOW}⏳ LDAP service still initializing...${NC}"
+        if [ $i -eq 6 ]; then
+            echo -e "${RED}❌ LDAP service failed to initialize within expected time${NC}"
+            echo -e "${YELLOW}Container logs:${NC}"
+            docker logs ldap --tail 10
+            exit 1
+        fi
+    fi
+done
 
 # Step 1.5: Generate LDIF files and load initial data
 confirm_step "About to generate LDIF files from CSV data and load them into LDAP"
 echo -e "${GREEN}🔄 Step 1.5: Generating LDIF files and loading initial data...${NC}"
 echo -e "${CYAN}📝 Generating LDIF from CSV files using containerized Python...${NC}"
-docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
-check_success
+
+# Generate LDIF files
+if docker exec python-bastion python python/csv_to_ldif.py data/admins.csv; then
+    echo -e "${GREEN}✓ LDIF generation completed${NC}"
+else
+    echo -e "${RED}❌ LDIF generation failed${NC}"
+    exit 1
+fi
+
+# Validate that LDIF files were created with content
+echo -e "${CYAN}🔍 Validating generated LDIF files...${NC}"
+if [ -f ldif/admins_only.ldif ]; then
+    admin_entries=$(grep -c "^dn: uid=" ldif/admins_only.ldif || echo 0)
+    group_entries=$(grep -c "^dn: cn=" ldif/admins_only.ldif || echo 0)
+    echo -e "${GREEN}✓ admins_only.ldif exists with $admin_entries users and $group_entries groups${NC}"
+    
+    if [ $admin_entries -eq 0 ]; then
+        echo -e "${RED}❌ No admin users found in LDIF file${NC}"
+        echo -e "${YELLOW}Checking admins.csv content:${NC}"
+        cat data/admins.csv
+        exit 1
+    fi
+else
+    echo -e "${RED}❌ admins_only.ldif file not found${NC}"
+    echo -e "${YELLOW}Available files in ldif/:${NC}"
+    ls -la ldif/ || echo "ldif/ directory not found"
+    exit 1
+fi
+
 echo -e "${CYAN}📥 Loading admin users into LDAP...${NC}"
 ./ldap/setup_ldap_data.sh
 check_success
-echo -e "${GREEN}✅ Initial LDAP data loaded successfully${NC}"
+echo -e "${GREEN}✅ Initial LDAP data loaded and validated successfully${NC}"
 echo ""
 
 # Step 2: Create Keycloak realm
@@ -182,7 +234,7 @@ echo ""
 echo -e "${GREEN}🔑 Admin credentials:${NC}"
 echo -e "${GREEN}   • Keycloak Realm Admin: admin-${REALM_NAME} / admin-${REALM_NAME}${NC}"
 echo -e "${GREEN}   • Keycloak Master Admin: admin / admin${NC}"
-echo -e "${GREEN}   • ${CYAN}LDAP${NC} Server (protocol): cn=admin,dc=mycompany,dc=local / admin${NC}"
+echo -e "${GREEN}   • ${CYAN}LDAP${NC} Server (protocol): cn=admin,dc=min,dc=io / admin${NC}"
 echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager (web UI): admin / admin${NC}"
 echo ""
 echo -e "${YELLOW}💡 Expected roles created: admin, developer, ds_member, user${NC}"
