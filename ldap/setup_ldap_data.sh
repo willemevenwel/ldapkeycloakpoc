@@ -64,7 +64,8 @@ if [ -f ldif/admins_only.ldif ]; then
     
     # Import LDIF and capture output for debugging
     echo -e "${CYAN}Importing admin LDIF...${NC}"
-    if docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -f /tmp/admins_only.ldif; then
+    # Use double slash to prevent Git Bash on Windows from translating the path
+    if docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -f //tmp/admins_only.ldif; then
         echo -e "${GREEN}✓ Admin LDIF imported successfully${NC}"
     else
         echo -e "${YELLOW}⚠️  LDIF import had warnings (possibly duplicate entries)${NC}"

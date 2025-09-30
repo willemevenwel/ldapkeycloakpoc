@@ -156,12 +156,14 @@ ldap_exec_safe() {
 }
 
 # Add new users and groups (ignore errors for existing entries)
-ldap_exec_safe "ldapadd -x -D cn=admin,dc=min,dc=io -w admin -c" "/tmp/users.ldif"
+# Use double slash to prevent Git Bash on Windows from translating the path
+ldap_exec_safe "ldapadd -x -D cn=admin,dc=min,dc=io -w admin -c" "//tmp/users.ldif"
 
 # Update existing group memberships if modify file exists
 if [ -f "ldif/group_assign.ldif" ]; then
     echo "👥 Updating existing group memberships..."
-    ldap_exec_safe "ldapmodify -x -D cn=admin,dc=min,dc=io -w admin -c" "/tmp/group_assign.ldif"
+    # Use double slash to prevent Git Bash on Windows from translating the path
+    ldap_exec_safe "ldapmodify -x -D cn=admin,dc=min,dc=io -w admin -c" "//tmp/group_assign.ldif"
 fi
 
 # Verify the import was successful
@@ -195,7 +197,8 @@ cleanup_with_retry() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        if docker exec ldap rm -f "/tmp/$file" 2>/dev/null; then
+        # Use double slash to prevent Git Bash path translation
+        if docker exec ldap rm -f "//tmp/$file" 2>/dev/null; then
             return 0
         fi
         sleep 1

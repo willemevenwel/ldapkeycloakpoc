@@ -91,7 +91,67 @@ fi
 
 echo ""
 
-# Test 2: LDAP service accessibility
+# Test 2: Windows Git Bash path handling (if on Windows)
+echo -e "${YELLOW}Testing platform-specific path handling...${NC}"
+
+# Detect if we're on Windows (Git Bash/MSYS/Cygwin)
+case "$(uname -s)" in
+    MINGW*|CYGWIN*|MSYS*)
+        echo -e "${CYAN}   Detected Windows environment - testing Git Bash path translation...${NC}"
+        
+        if [ -n "$ldap_running" ]; then
+            # Test Windows Git Bash path translation issue
+            docker exec ldap sh -c 'echo "test" > /tmp/windows_path_test.txt' >/dev/null 2>&1
+            
+            # Test old problematic path
+            docker exec ldap cat /tmp/windows_path_test.txt >/dev/null 2>&1
+            old_path_result=$?
+            
+            # Test fixed path
+            docker exec ldap cat //tmp/windows_path_test.txt >/dev/null 2>&1
+            new_path_result=$?
+            
+            # Cleanup
+            docker exec ldap rm -f //tmp/windows_path_test.txt >/dev/null 2>&1
+            
+            if [ $old_path_result -eq 0 ] && [ $new_path_result -eq 0 ]; then
+                check_result "pass" "Windows path handling" "both old and new paths work (WSL or compatible environment)"
+            elif [ $old_path_result -ne 0 ] && [ $new_path_result -eq 0 ]; then
+                check_result "pass" "Windows path handling" "fixed paths work correctly (Git Bash path translation resolved)"
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${CYAN}   🔧 Path fix details: '/tmp/' → '//tmp/' prevents Git Bash translation${NC}"
+                fi
+            elif [ $old_path_result -eq 0 ] && [ $new_path_result -ne 0 ]; then
+                check_result "fail" "Windows path handling" "old paths work but new paths don't - unusual configuration"
+                echo -e "${YELLOW}   💡 Scripts may need further adjustment${NC}"
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${YELLOW}   🔧 Debug: Old path result=$old_path_result, New path result=$new_path_result${NC}"
+                fi
+            else
+                check_result "fail" "Windows path handling" "both paths fail - Docker/container issue"
+                echo -e "${YELLOW}   💡 Check Docker Desktop settings and container status${NC}"
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${YELLOW}   🔧 Debug: Old path result=$old_path_result, New path result=$new_path_result${NC}"
+                fi
+            fi
+        else
+            check_result "fail" "Windows path handling" "LDAP container not running - cannot test"
+        fi
+        ;;
+    Darwin*)
+        check_result "pass" "Platform detection" "macOS - no path translation issues expected"
+        ;;
+    Linux*)
+        check_result "pass" "Platform detection" "Linux - no path translation issues expected"
+        ;;
+    *)
+        check_result "pass" "Platform detection" "Unknown system - assuming Unix-like behavior"
+        ;;
+esac
+
+echo ""
+
+# Test 3: LDAP service accessibility
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} service...${NC}"
 
 # First check if LDAP container is responsive
@@ -137,7 +197,7 @@ else
     check_result "fail" "${CYAN}LDAP${NC} container responsiveness" "container not responding"
 fi
 
-# Test 3: LDAP users and groups
+# Test 4: LDAP users and groups
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} data import...${NC}"
 
 # Check if OUs exist first
@@ -199,7 +259,7 @@ fi
 
 echo ""
 
-# Test 4: Keycloak service accessibility
+# Test 5: Keycloak service accessibility
 echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} service...${NC}"
 keycloak_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8090/health/ready 2>/dev/null)
 if [ "$keycloak_health" = "200" ]; then
@@ -214,7 +274,7 @@ else
     fi
 fi
 
-# Test 5: Keycloak realm exists
+# Test 6: Keycloak realm exists
 if [ -n "$REALM_NAME" ]; then
     echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} realm...${NC}"
     realm_check=$(curl -s "http://localhost:8090/realms/${REALM_NAME}" 2>/dev/null)
@@ -228,7 +288,7 @@ else
 fi
 
 echo ""
-# Test 6: Get Keycloak admin token and test LDAP provider
+# Test 7: Get Keycloak admin token and test LDAP provider
 if [ -n "$REALM_NAME" ]; then
     echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} integration...${NC}"
     admin_token=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
@@ -271,7 +331,7 @@ fi
 
 echo ""
 
-# Test 7: LDAP Web Manager
+# Test 8: LDAP Web Manager
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} Web Manager...${NC}"
 webui_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null)
 if [ "$webui_health" = "200" ]; then
@@ -280,7 +340,7 @@ else
     check_result "fail" "${CYAN}LDAP${NC} Web Manager" "not accessible"
 fi
 
-# Test 8: Python Bastion functionality
+# Test 9: Python Bastion functionality
 echo -e "${YELLOW}Testing Python Bastion...${NC}"
 python_test=$(docker exec python-bastion python --version 2>/dev/null)
 if [ $? -eq 0 ]; then
@@ -289,7 +349,7 @@ else
     check_result "fail" "Python Bastion functionality" "Python not accessible"
 fi
 
-# Test 9: Generated LDIF files
+# Test 10: Generated LDIF files
 echo -e "${YELLOW}Testing generated files...${NC}"
 if [ -f "ldif/admins_only.ldif" ] && [ -s "ldif/admins_only.ldif" ]; then
     check_result "pass" "LDIF files generated" "admins_only.ldif present and non-empty"
@@ -297,7 +357,7 @@ else
     check_result "fail" "LDIF files generated" "admins_only.ldif missing or empty"
 fi
 
-# Test 10: Platform-specific information
+# Test 11: Platform-specific information
 if [ "$DEBUG_MODE" = true ]; then
     echo -e "${YELLOW}Platform and system information...${NC}"
     

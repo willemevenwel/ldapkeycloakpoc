@@ -10,11 +10,23 @@
 - Admin user exists but additional users don't import
 
 **Cause:**
-- Windows Docker translates container paths to Windows paths incorrectly
-- LDAP commands look for files in wrong location
+- Git Bash on Windows translates `/tmp/` paths to Windows paths like `C:/Users/.../AppData/Local/Temp/`
+- This happens because Git Bash tries to convert Unix-style paths to Windows paths
+- The LDAP commands inside the Docker container need the literal `/tmp/` path
 
 **Solution:**
-This is fixed in the updated scripts. The `ldap_exec_safe` function now properly handles container file paths.
+**FIXED** - The scripts now use `//tmp/` instead of `/tmp/` to prevent Git Bash path translation.
+
+The updated scripts in `ldap/setup_ldap_data.sh` and `ldap/load_additional_users.sh` now use:
+```bash
+# Before (causes issues on Windows Git Bash):
+docker exec ldap ldapadd ... -f /tmp/users.ldif
+
+# After (Windows Git Bash compatible):
+docker exec ldap ldapadd ... -f //tmp/users.ldif
+```
+
+This prevents Git Bash from translating the path while keeping the correct path inside the container.
 
 ### 2. LDAP Authentication Fails (Error 49: Invalid Credentials)
 
@@ -36,11 +48,14 @@ This is fixed in the updated scripts. The `ldap_exec_safe` function now properly
 ./test_all.sh your-realm-name --debug
 
 # This will show:
-# - Platform detection (Windows vs macOS vs Linux)
+# - Platform detection (Windows vs macOS vs Linux)  
+# - Windows Git Bash path translation testing (NEW!)
 # - LDAP connectivity and file path handling
 # - Container communication status
 # - User/group import validation
 # - Keycloak integration status
+
+# The test will specifically verify that the //tmp/ path fix is working correctly
 
 # If setup is still failing, try regenerating and reloading data
 docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
