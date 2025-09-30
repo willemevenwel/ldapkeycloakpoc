@@ -2,7 +2,7 @@ import csv, hashlib, base64
 import os
 import sys
 
-LDAP_DOMAIN = "dc=mycompany,dc=local"
+LDAP_DOMAIN = "dc=min,dc=io"
 USERS_OU = "ou=users," + LDAP_DOMAIN
 GROUPS_OU = "ou=groups," + LDAP_DOMAIN
 

@@ -25,12 +25,12 @@ fi
 
 echo "LDAP container is running, checking LDAP service availability..."
 
-while ! docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=mycompany,dc=local" -w admin -b "dc=mycompany,dc=local" >/dev/null 2>&1; do
+while ! docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "dc=min,dc=io" >/dev/null 2>&1; do
     if [ $counter -eq $timeout ]; then
         echo -e "${RED}Error: LDAP server did not respond within $timeout seconds${NC}"
         echo -e "${YELLOW}Container is running but LDAP service is not ready${NC}"
         echo -e "${YELLOW}Try running this command manually to debug:${NC}"
-        echo -e "${YELLOW}docker exec ldap ldapsearch -x -H ldap://localhost:389 -D \"cn=admin,dc=mycompany,dc=local\" -w admin -b \"dc=mycompany,dc=local\"${NC}"
+        echo -e "${YELLOW}docker exec ldap ldapsearch -x -H ldap://localhost:389 -D \"cn=admin,dc=min,dc=io\" -w admin -b \"dc=min,dc=io\"${NC}"
         exit 1
     fi
     echo "Waiting for LDAP service... ($counter/$timeout)"
@@ -47,7 +47,7 @@ if [ -f ldif/admins_only.ldif ]; then
     echo "Copying and importing admin users..."
     docker cp ldif/admins_only.ldif ldap:/tmp/admins_only.ldif
     # Use -c flag to continue on errors (like "already exists")
-    docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=mycompany,dc=local' -w admin -f /tmp/admins_only.ldif || true
+    docker exec ldap ldapadd -c -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -f /tmp/admins_only.ldif || true
     echo -e "${GREEN}Admin import completed successfully!${NC}"
 else
     echo -e "${YELLOW}No admin LDIF file found to import${NC}"

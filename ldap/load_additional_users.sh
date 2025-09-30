@@ -35,7 +35,7 @@ wait_for_ldap() {
         fi
         
         # Test LDAP connectivity
-        if docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin "(objectClass=dcObject)" > /dev/null 2>&1; then
+        if docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=dcObject)" > /dev/null 2>&1; then
             echo -e "✅ ${CYAN}LDAP${NC} container is ready and responding"
             return 0
         fi
@@ -155,18 +155,18 @@ ldap_exec_safe() {
 }
 
 # Add new users and groups (ignore errors for existing entries)
-ldap_exec_safe ldapadd -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/users.ldif -c
+ldap_exec_safe ldapadd -x -D "cn=admin,dc=min,dc=io" -w admin -f /tmp/users.ldif -c
 
 # Update existing group memberships if modify file exists
 if [ -f "ldif/group_assign.ldif" ]; then
     echo "👥 Updating existing group memberships..."
-    ldap_exec_safe ldapmodify -x -D "cn=admin,dc=mycompany,dc=local" -w admin -f /tmp/group_assign.ldif -c
+    ldap_exec_safe ldapmodify -x -D "cn=admin,dc=min,dc=io" -w admin -f /tmp/group_assign.ldif -c
 fi
 
 # Verify the import was successful
 echo -e "🔍 Verifying import..."
-USER_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "ou=users,dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep "uid:" | wc -l)
-GROUP_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "ou=groups,dc=mycompany,dc=local" -D "cn=admin,dc=mycompany,dc=local" -w admin "(objectClass=posixGroup)" cn 2>/dev/null | grep "cn:" | wc -l)
+USER_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "ou=users,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=inetOrgPerson)" uid 2>/dev/null | grep "uid:" | wc -l)
+GROUP_COUNT=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "ou=groups,dc=min,dc=io" -D "cn=admin,dc=min,dc=io" -w admin "(objectClass=posixGroup)" cn 2>/dev/null | grep "cn:" | wc -l)
 
 echo -e "� Import verification:"
 echo -e "   • Users in ${CYAN}LDAP${NC}:  ${USER_COUNT}"
@@ -181,10 +181,7 @@ else
 fi
 
 echo ""
-echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"
-echo -e "   ${CYAN}LDAP${NC} Protocol:            ${BLUE}ldap://localhost:389${NC}"
-echo -e "   ${CYAN}LDAP${NC} Web Manager:         ${BLUE}http://localhost:8091${NC}"
-echo -e "   ${CYAN}LDAP${NC} Web Manager Login:   ${YELLOW}admin / admin${NC}"
+echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"\necho -e "   ${CYAN}LDAP${NC} Protocol:            ${BLUE}ldap://localhost:389${NC}"\necho -e "   ${CYAN}LDAP${NC} Web Manager:         ${BLUE}http://localhost:8080${NC}"\necho -e "   ${CYAN}LDAP${NC} Web Manager Login:   ${YELLOW}admin / admin${NC}"
 echo ""
 echo "📊 To verify the import, you can run:"
 echo -e "   ${YELLOW}ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -b 'ou=users,dc=min,dc=io' '(objectClass=inetOrgPerson)'${NC}"

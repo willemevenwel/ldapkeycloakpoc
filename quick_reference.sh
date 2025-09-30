@@ -19,7 +19,7 @@ LDAP_RUNNING=$(docker ps --filter "name=ldap" --filter "status=running" -q | wc 
 if [ "$LDAP_RUNNING" -eq 1 ]; then
     LDAP_STATUS="${GREEN}RUNNING${NC}"
     # Get current user count from LDAP
-    LDAP_USER_COUNT=$(docker exec ldap ldapsearch -x -D "cn=admin,dc=mycompany,dc=local" -w admin -b "ou=users,dc=mycompany,dc=local" "(objectClass=inetOrgPerson)" dn 2>/dev/null | grep -c "^dn:" || echo "0")
+    LDAP_USER_COUNT=$(docker exec ldap ldapsearch -x -D "cn=admin,dc=min,dc=io" -w admin -b "ou=users,dc=min,dc=io" "(objectClass=inetOrgPerson)" dn 2>/dev/null | grep -c "^dn:" || echo "0")
 else
     LDAP_STATUS="${RED}STOPPED${NC}"
     LDAP_USER_COUNT="0"
@@ -72,8 +72,8 @@ echo ""
 echo -e "${WHITE}🔍 Verification:${NC}"
 echo -e "${WHITE}   # Check loaded users:${NC}"
 echo -e "${GREEN}   ldapsearch -x -H ldap://localhost:389 \\${NC}"
-echo -e "${GREEN}     -D 'cn=admin,dc=mycompany,dc=local' -w admin \\${NC}"
-echo -e "${GREEN}     -b 'ou=users,dc=mycompany,dc=local' \\${NC}"
+echo -e "${GREEN}     -D 'cn=admin,dc=min,dc=io' -w admin \\${NC}"
+echo -e "${GREEN}     -b 'ou=users,dc=min,dc=io' \\${NC}"
 echo -e "${GREEN}     '(objectClass=inetOrgPerson)' uid${NC}"
 echo ""
 
