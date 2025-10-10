@@ -192,7 +192,7 @@ create_group_mapper() {
     echo -e "${YELLOW}👥 Creating ${CYAN}LDAP${NC} group mapper...${NC}"
     
     # Define which groups to sync (you can modify this list)
-    GROUPS_TO_SYNC="admins|developers|ds1|ds2|ds3|user"  # Sync all groups
+    GROUPS_TO_SYNC="admins|developers|acme_ds1|acme_ds2|acme_ds3|acme_user|xyz_ds1|xyz_ds2"  # Sync all groups
     
     GROUP_MAPPER_CONFIG=$(cat <<EOF
 {
@@ -209,7 +209,7 @@ create_group_mapper() {
         "membership.ldap.attribute": ["memberUid"],
         "membership.attribute.type": ["UID"],
         "membership.user.ldap.attribute": ["uid"],
-        "groups.ldap.filter": ["(|(cn=admins)(cn=developers)(cn=ds1)(cn=ds2)(cn=ds3)(cn=user))"],
+        "groups.ldap.filter": ["(|(cn=admins)(cn=developers)(cn=acme_ds1)(cn=acme_ds2)(cn=acme_ds3)(cn=acme_user)(cn=xyz_ds1)(cn=xyz_ds2))"],
         "mode": ["READ_ONLY"],
         "user.roles.retrieve.strategy": ["LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"],
         "mapped.group.attributes": [],
@@ -287,7 +287,7 @@ echo -e "   • ${CYAN}LDAP${NC} Provider url : ${BLUE}${KEYCLOAK_URL}/admin/mas
 echo -e "   • ${CYAN}LDAP${NC} Server       : ${CYAN}ldap://ldap:389${NC}"
 echo -e "   • Users DN       : ou=users,dc=min,dc=io"
 echo -e "   • Groups DN      : ou=groups,dc=min,dc=io"
-echo -e "   • Groups Filter  : Syncing all groups: admins, developers, ds1, ds2, ds3, user"
+echo -e "   • Groups Filter  : Syncing all groups: admins, developers, acme_ds1, acme_ds2, acme_ds3, acme_user, xyz_ds1, xyz_ds2"
 echo -e "   • Edit Mode      : READ_ONLY"
 echo -e "   • Role Mapper    : Will be created by update_role_mapper.sh"
 echo -e "   • Authentication : $([ "$USE_MASTER_ADMIN" = "true" ] && echo "Master Admin" || echo "Realm Admin")"
