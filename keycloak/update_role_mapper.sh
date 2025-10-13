@@ -128,7 +128,7 @@ create_role_mapper() {
         "membership.ldap.attribute": ["memberUid"],
         "membership.attribute.type": ["UID"],
         "membership.user.ldap.attribute": ["uid"],
-        "roles.ldap.filter": ["(|(cn=admins)(cn=developers)(cn=acme_ds1)(cn=acme_ds2)(cn=acme_ds3)(cn=acme_user)(cn=xyz_ds1)(cn=xyz_ds2))"],
+        "roles.ldap.filter": ["(|(cn=admins)(cn=developers)(cn=acme*)(cn=xyz*))"],
         "mode": ["READ_ONLY"],
         "use.realm.roles.mapping": ["true"],
         "client.id": [""],
@@ -252,7 +252,7 @@ echo -e "   • Role Mapper: role-mapper-${REALM} (ID: ${ROLE_MAPPER_ID})"
 echo -e "   • Roles DN: ou=groups,dc=min,dc=io"
 echo -e "   • Pre-created Roles: admin, developer (created during realm setup)"
 echo -e "   • Auto-created Roles: Will be created from LDAP group names during sync"
-echo -e "   • LDAP Filter: Groups (admins, developers, acme_ds1, acme_ds2, acme_ds3, acme_user, xyz_ds1, xyz_ds2)"
+echo -e "   • LDAP Filter: Groups (admins, developers, and any groups starting with 'acme' or 'xyz')"
 echo -e "   • Mode: READ_ONLY"
 echo -e "   • Mapping Type: Realm Roles (mix of pre-created and auto-created)"
 
@@ -267,12 +267,9 @@ echo -e "${YELLOW}   • Pre-created roles (clean names):${NC}"
 echo -e "${YELLOW}     - LDAP Group 'admins' → Realm Role 'admin' (pre-created)${NC}"
 echo -e "${YELLOW}     - LDAP Group 'developers' → Realm Role 'developer' (pre-created)${NC}"
 echo -e "${YELLOW}   • Auto-created roles (LDAP group names):${NC}"
-echo -e "${YELLOW}     - LDAP Group 'acme_ds1' → Realm Role 'acme_ds1' (auto-created)${NC}"
-echo -e "${YELLOW}     - LDAP Group 'acme_ds2' → Realm Role 'acme_ds2' (auto-created)${NC}"
-echo -e "${YELLOW}     - LDAP Group 'acme_ds3' → Realm Role 'acme_ds3' (auto-created)${NC}"
-echo -e "${YELLOW}     - LDAP Group 'acme_user' → Realm Role 'acme_user' (auto-created)${NC}"
-echo -e "${YELLOW}     - LDAP Group 'xyz_ds1' → Realm Role 'xyz_ds1' (auto-created)${NC}"
-echo -e "${YELLOW}     - LDAP Group 'xyz_ds2' → Realm Role 'xyz_ds2' (auto-created)${NC}"
+echo -e "${YELLOW}     - Any LDAP Group starting with 'acme' → Corresponding Realm Role (auto-created)${NC}"
+echo -e "${YELLOW}     - Any LDAP Group starting with 'xyz' → Corresponding Realm Role (auto-created)${NC}"
+echo -e "${YELLOW}     - Examples: acme_ds1, acme_ds2, acme_user, xyz_ds1, xyz_ds2, etc.${NC}"
 echo -e "${CYAN}   📝 To add more pre-created roles, modify REALM_ROLES_TO_CREATE in the script${NC}"
 
 echo ""
