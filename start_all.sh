@@ -50,6 +50,8 @@ if [ "$CHECK_STEPS" = true ]; then
 fi
 echo -e "${YELLOW}📋 This will execute the following steps:${NC}"
 echo -e "${YELLOW}   1. Start all services (Docker containers)${NC}"
+echo -e "${YELLOW}   1.5. Generate and load initial LDAP data${NC}"
+echo -e "${YELLOW}   1.9. Check Keycloak server details and existing realms${NC}"
 echo -e "${YELLOW}   2. Create Keycloak realm: ${REALM_NAME}${NC}"
 echo -e "${YELLOW}   3. Add LDAP provider${NC}"
 echo -e "${YELLOW}   4. Create role mapper for LDAP groups${NC}"
@@ -179,6 +181,16 @@ check_success
 echo -e "${GREEN}✅ Initial LDAP data loaded and validated successfully${NC}"
 echo ""
 
+# Step 1.9: Get Keycloak details for debugging
+confirm_step "About to check Keycloak server details and existing realms"
+echo -e "${GREEN}🔄 Step 1.9: Getting Keycloak server details...${NC}"
+cd keycloak
+./keycloak_details.sh
+check_success
+cd "$START_DIR"
+echo -e "${GREEN}✅ Keycloak details retrieved successfully${NC}"
+echo ""
+
 # Step 2: Create Keycloak realm
 confirm_step "About to create Keycloak realm '${REALM_NAME}' with admin user and anticipated roles"
 echo -e "${GREEN}🔄 Step 2: Creating Keycloak realm '${REALM_NAME}'...${NC}"
@@ -212,8 +224,72 @@ check_success
 echo -e "${GREEN}✅ Users and roles synced successfully${NC}"
 echo ""
 
-# Return to the original directory before final prompt
+# Return to the original directory before organization setup
 cd "$START_DIR"
+
+# NEW: Organization Setup Section
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}🏢 Organization Setup (NEW FEATURE)${NC}"
+echo -e "${YELLOW}   This will configure organizations with role prefixes like: acme_admin, xyz_developer${NC}"
+echo -e "${YELLOW}   Organizations enable role filtering by prefix in shared clients${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -en "${CYAN}Do you want to set up organizations? (y/N - default is No): ${NC}"
+read -r setup_organizations
+
+if [ "${setup_organizations}" = "Y" ] || [ "${setup_organizations}" = "y" ]; then
+    echo ""
+    echo -e "${YELLOW}🏢 Setting up organizations...${NC}"
+    echo -e "${BLUE}💡 Enter organization prefixes (e.g., acme xyz abc)${NC}"
+    echo -e "${BLUE}   These will be used for role prefixes like: acme_admin, xyz_developer${NC}"
+    echo -e "${BLUE}   Default organizations: acme xyz${NC}"
+    echo -en "${CYAN}Enter organization prefixes (space-separated, or press Enter for defaults): ${NC}"
+    read -r org_prefixes
+    
+    # Use defaults if no input provided
+    if [ -z "$org_prefixes" ]; then
+        org_prefixes="acme xyz"
+        echo -e "${YELLOW}Using default organizations: ${org_prefixes}${NC}"
+    else
+        echo -e "${GREEN}Using organizations: ${org_prefixes}${NC}"
+    fi
+    
+    # Step 6: Setup Organizations
+    echo ""
+    confirm_step "About to setup organizations: ${org_prefixes}"
+    echo -e "${GREEN}🔄 Step 6: Setting up organizations...${NC}"
+    cd keycloak
+    ./setup_organizations.sh "${REALM_NAME}" ${org_prefixes}
+    check_success
+    echo -e "${GREEN}✅ Organizations setup completed successfully${NC}"
+    
+    # Step 7: Configure Shared Clients
+    echo ""
+    confirm_step "About to configure shared clients with organization-aware role filtering"
+    echo -e "${GREEN}🔄 Step 7: Configuring shared clients...${NC}"
+    ./configure_shared_clients.sh "${REALM_NAME}" ${org_prefixes}
+    check_success
+    echo -e "${GREEN}✅ Shared clients configured successfully${NC}"
+    
+    # Return to start directory
+    cd "$START_DIR"
+    
+    echo ""
+    echo -e "${GREEN}🎉 Organization setup completed!${NC}"
+    echo -e "${YELLOW}📋 Organization Summary:${NC}"
+    echo -e "${YELLOW}   • Organizations created: ${org_prefixes}${NC}"
+    echo -e "${YELLOW}   • Shared clients: shared-web-client, shared-api-client${NC}"
+    echo -e "${YELLOW}   • Role filtering: JWT tokens contain org-specific claims${NC}"
+    echo -e "${YELLOW}   • LDAP groups matching org prefixes will sync automatically${NC}"
+    echo ""
+    ORGANIZATIONS_CONFIGURED=true
+else
+    echo -e "${YELLOW}Skipped organization setup. You can run it manually later with:${NC}"
+    echo -e "${YELLOW}   cd keycloak && ./setup_organizations.sh ${REALM_NAME} acme xyz${NC}"
+    echo -e "${YELLOW}   cd keycloak && ./configure_shared_clients.sh ${REALM_NAME} acme xyz${NC}"
+    echo ""
+    ORGANIZATIONS_CONFIGURED=false
+fi
 
 # Final summary
 echo -e "${GREEN}🎉 Complete setup finished successfully!${NC}"
@@ -225,10 +301,18 @@ echo -e "${YELLOW}   • Keycloak realm '${REALM_NAME}' created${NC}"
 echo -e "${YELLOW}   • LDAP provider 'ldap-provider-${REALM_NAME}' configured${NC}"
 echo -e "${YELLOW}   • Role mapper 'role-mapper-${REALM_NAME}' configured${NC}"
 echo -e "${YELLOW}   • Users and roles synced from LDAP to Keycloak${NC}"
+if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
+    echo -e "${YELLOW}   • Organizations configured: ${org_prefixes}${NC}"
+    echo -e "${YELLOW}   • Shared clients with role filtering configured${NC}"
+fi
 echo ""
 echo -e "${GREEN}🌐 Access your setup:${NC}"
 echo -e "${GREEN}   • Keycloak Admin     : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
 echo -e "${GREEN}   • Realm URL          : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
+if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
+    echo -e "${GREEN}   • Organizations      : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/organizations${NC}"
+    echo -e "${GREEN}   • Clients            : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/clients${NC}"
+fi
 echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${BLUE}http://localhost:8091${NC}"
 echo ""
 echo -e "${GREEN}🔑 Admin credentials:${NC}"
@@ -237,7 +321,13 @@ echo -e "${GREEN}   • Keycloak Master Admin: admin / admin${NC}"
 echo -e "${GREEN}   • ${CYAN}LDAP${NC} Server (protocol): cn=admin,dc=min,dc=io / admin${NC}"
 echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager (web UI): admin / admin${NC}"
 echo ""
-echo -e "${YELLOW}💡 Expected roles created: admin, developer, ds_member, user${NC}"
+if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
+    echo -e "${YELLOW}💡 Expected roles created: admin, developer, ds_member, user${NC}"
+    echo -e "${YELLOW}💡 Organization roles created: $(echo ${org_prefixes} | sed 's/\([^ ]*\)/\1_admin, \1_developer, \1_user, \1_manager, \1_specialist/g' | sed 's/, *$//')${NC}"
+    echo -e "${YELLOW}💡 Role pattern: {org_prefix}_{role_name} (e.g., abc_admin, xyz_developer)${NC}"
+else
+    echo -e "${YELLOW}💡 Expected roles created: admin, developer, ds_member, user${NC}"
+fi
 
 echo -e "${YELLOW}💡 Expected users synced: admin, alice, bob, charlie, willem, jp, louis, razvan, jack, andre, anwar${NC}"
 echo ""
@@ -247,6 +337,15 @@ echo -e "${YELLOW}📖 Usage examples:${NC}"
 echo -e "${YELLOW}   ./start_all.sh my-realm${NC}                    # Full automated setup"
 echo -e "${YELLOW}   ./start_all.sh my-realm --check-steps${NC}      # Interactive mode with confirmations"
 echo -e "${YELLOW}   ./start_all.sh --check-steps${NC}               # Interactive mode, will prompt for realm name"
+echo ""
+if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
+    echo -e "${CYAN}🏢 Organization Features Available:${NC}"
+    echo -e "${CYAN}   • JWT tokens contain organization-specific role claims${NC}"
+    echo -e "${CYAN}   • Shared clients: shared-web-client, shared-api-client${NC}"
+    echo -e "${CYAN}   • Role filtering by organization prefix in JWT tokens${NC}"
+    echo -e "${CYAN}   • View organization setup guide: ./keycloak/organization_setup_guide.sh${NC}"
+    echo ""
+fi
 
 # --- Optional: Load additional users ---
 echo ""

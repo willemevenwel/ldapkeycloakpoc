@@ -386,6 +386,420 @@ if [ "$DEBUG_MODE" = true ]; then
     echo ""
 fi
 
+# Test 12: Organizations Feature Enablement (COMPREHENSIVE CHECK)
+if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
+    echo -e "${YELLOW}Testing Organizations feature enablement...${NC}"
+    
+    # Get current realm configuration for comprehensive check
+    realm_config_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}" \
+        -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+    
+    if [ -n "$realm_config_response" ]; then
+        # Test 1: Check server-level Organizations feature
+        server_features_response=$(curl -s -X GET "http://localhost:8090/admin/serverinfo" \
+            -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+        
+        if echo "$server_features_response" | grep -q '"name":"ORGANIZATION"' && echo "$server_features_response" | grep -q '"enabled":true'; then
+            check_result "pass" "Server-level Organizations feature" "enabled in Keycloak server"
+        else
+            check_result "fail" "Server-level Organizations feature" "not enabled in Keycloak server"
+            if [ "$DEBUG_MODE" = true ]; then
+                echo -e "${YELLOW}   💡 Check docker-compose.yml command: should include --features=organization${NC}"
+            fi
+        fi
+        
+        # Test 2: Check realm attribute (org.keycloak.organization.enabled)
+        if echo "$realm_config_response" | grep -q '"org.keycloak.organization.enabled":"true"'; then
+            check_result "pass" "Realm Organizations attribute" "org.keycloak.organization.enabled = true"
+        else
+            check_result "fail" "Realm Organizations attribute" "org.keycloak.organization.enabled not set to true"
+        fi
+        
+        # Test 3: Check realm organizationsEnabled field
+        if echo "$realm_config_response" | grep -q '"organizationsEnabled":true'; then
+            check_result "pass" "Realm Organizations field" "organizationsEnabled = true"
+        else
+            check_result "fail" "Realm Organizations field" "organizationsEnabled not set to true"
+            if [ "$DEBUG_MODE" = true ]; then
+                echo -e "${YELLOW}   💡 This field is required for Organizations UI visibility${NC}"
+            fi
+        fi
+        
+        # Test 4: Check Organizations API accessibility
+        org_api_response=$(curl -s -w "%{http_code}" -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/organizations" \
+            -H "Authorization: Bearer ${admin_token}" \
+            -o /tmp/org_api_check.json 2>/dev/null)
+        
+        if [ "$org_api_response" = "200" ]; then
+            check_result "pass" "Organizations API accessibility" "HTTP 200 - API is accessible"
+            
+            # Count existing organizations
+            if [ -f /tmp/org_api_check.json ]; then
+                org_count=$(cat /tmp/org_api_check.json | grep -o '"id"' | wc -l | tr -d ' ')
+                if [ "$org_count" -gt 0 ]; then
+                    check_result "pass" "Organizations created" "${org_count} organizations found"
+                else
+                    check_result "pass" "Organizations ready" "API accessible, no organizations created yet"
+                fi
+            fi
+        else
+            check_result "fail" "Organizations API accessibility" "HTTP ${org_api_response} - API not accessible"
+            if [ -f /tmp/org_api_check.json ]; then
+                api_error=$(cat /tmp/org_api_check.json)
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${YELLOW}   🔧 API Error: ${api_error}${NC}"
+                fi
+            fi
+        fi
+        
+        # Test 5: Comprehensive Organizations enablement status
+        server_org_enabled=$(echo "$server_features_response" | grep -q '"name":"ORGANIZATION"' && echo "$server_features_response" | grep -q '"enabled":true' && echo "true" || echo "false")
+        realm_attr_enabled=$(echo "$realm_config_response" | grep -q '"org.keycloak.organization.enabled":"true"' && echo "true" || echo "false")
+        realm_field_enabled=$(echo "$realm_config_response" | grep -q '"organizationsEnabled":true' && echo "true" || echo "false")
+        api_accessible=$([ "$org_api_response" = "200" ] && echo "true" || echo "false")
+        
+        if [ "$server_org_enabled" = "true" ] && [ "$realm_attr_enabled" = "true" ] && [ "$realm_field_enabled" = "true" ] && [ "$api_accessible" = "true" ]; then
+            check_result "pass" "Complete Organizations enablement" "all requirements met - UI should be visible"
+        else
+            check_result "fail" "Complete Organizations enablement" "missing requirements for full functionality"
+            if [ "$DEBUG_MODE" = true ]; then
+                echo -e "${CYAN}   🔧 Organizations Enablement Status:${NC}"
+                echo -e "${CYAN}      • Server feature enabled: ${server_org_enabled}${NC}"
+                echo -e "${CYAN}      • Realm attribute set: ${realm_attr_enabled}${NC}"
+                echo -e "${CYAN}      • Realm field enabled: ${realm_field_enabled}${NC}"
+                echo -e "${CYAN}      • API accessible: ${api_accessible}${NC}"
+                echo ""
+                echo -e "${YELLOW}   💡 All four must be 'true' for Organizations to appear in UI${NC}"
+            fi
+        fi
+        
+        # Test 6: Organizations UI direct access test
+        if [ "$server_org_enabled" = "true" ] && [ "$realm_attr_enabled" = "true" ] && [ "$realm_field_enabled" = "true" ]; then
+            org_ui_url="http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/organizations"
+            check_result "pass" "Organizations UI availability" "should be accessible at console"
+            if [ "$DEBUG_MODE" = true ]; then
+                echo -e "${CYAN}   🌐 Organizations UI URL: ${org_ui_url}${NC}"
+                echo -e "${CYAN}   💡 If UI not visible, try browser refresh (Ctrl+F5) or clear cache${NC}"
+            fi
+        else
+            check_result "fail" "Organizations UI availability" "requirements not met - UI will not be visible"
+        fi
+        
+        # Cleanup temporary files
+        rm -f /tmp/org_api_check.json 2>/dev/null
+        
+    else
+        check_result "fail" "Realm configuration access" "could not retrieve realm configuration"
+    fi
+    
+echo ""
+else
+    echo -e "${YELLOW}⚠️  Skipping Organizations feature enablement tests - no realm name or admin token${NC}"
+fi
+
+echo ""
+
+# Test 13: Organization-aware shared clients (NEW FEATURE)
+if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
+    echo -e "${YELLOW}Testing organization-aware shared clients...${NC}"
+    
+    # Test shared-web-client exists
+    web_client_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
+        -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+    
+    if echo "$web_client_response" | grep -q "shared-web-client"; then
+        check_result "pass" "Shared web client" "exists and configured"
+        
+        # Extract client UUID and secret for testing
+        WEB_CLIENT_UUID=$(echo "$web_client_response" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        
+        if [ -n "$WEB_CLIENT_UUID" ]; then
+            # Get client secret
+            web_client_secret_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/client-secret" \
+                -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+            WEB_CLIENT_SECRET=$(echo "$web_client_secret_response" | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
+            
+            if [ -n "$WEB_CLIENT_SECRET" ]; then
+                check_result "pass" "Shared web client secret" "retrieved successfully"
+                
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${CYAN}   🔧 Web Client Secret: ${WEB_CLIENT_SECRET}${NC}"
+                fi
+            else
+                check_result "fail" "Shared web client secret" "could not retrieve"
+            fi
+        fi
+    else
+        check_result "fail" "Shared web client" "not found"
+    fi
+    
+    # Test shared-api-client exists
+    api_client_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients?clientId=shared-api-client" \
+        -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+    
+    if echo "$api_client_response" | grep -q "shared-api-client"; then
+        check_result "pass" "Shared API client" "exists and configured"
+    else
+        check_result "fail" "Shared API client" "not found"
+    fi
+    
+echo ""
+    
+    # Test 14: Organization-specific protocol mappers
+    echo -e "${YELLOW}Testing organization-specific protocol mappers...${NC}"
+    
+    if [ -n "$WEB_CLIENT_UUID" ]; then
+        # Get protocol mappers for web client
+        mappers_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/protocol-mappers/models" \
+            -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+        
+        # Check for realm role mapper (could be named "realm roles", "realm_access", or "realm_access-structure")
+        if echo "$mappers_response" | grep -qE "(realm.roles|realm_access)"; then
+            check_result "pass" "Realm roles mapper" "configured for global role access"
+        else
+            check_result "fail" "Realm roles mapper" "not found"
+        fi
+        
+        # Check for organization-specific role mappers
+        if echo "$mappers_response" | grep -q "acme-roles"; then
+            check_result "pass" "ACME role mapper" "configured for filtered ACME roles"
+        else
+            check_result "fail" "ACME role mapper" "not found"
+        fi
+        
+        if echo "$mappers_response" | grep -q "xyz-roles"; then
+            check_result "pass" "XYZ role mapper" "configured for filtered XYZ roles"
+        else
+            check_result "fail" "XYZ role mapper" "not found"
+        fi
+        
+        # Check for organization indicators
+        if echo "$mappers_response" | grep -q "organization_enabled"; then
+            check_result "pass" "Organization indicators" "configured for JWT tokens"
+        else
+            check_result "fail" "Organization indicators" "not found"
+        fi
+        
+        if [ "$DEBUG_MODE" = true ]; then
+            echo -e "${CYAN}📋 Protocol mappers configured:${NC}"
+            echo "$mappers_response" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | sed 's/^/   • /'
+            echo ""
+        fi
+    fi
+    
+echo ""
+    
+    # Test 15: JWT Token generation and organization role filtering
+    echo -e "${YELLOW}Testing JWT token generation with organization role filtering...${NC}"
+    
+    if [ -n "$WEB_CLIENT_SECRET" ]; then
+        # Test with a user that has organization-specific roles
+        # Try with willem who should have acme and xyz roles based on the CSV
+        TEST_USERNAME="willem"
+        TEST_PASSWORD="willem"
+        
+        token_response=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "username=${TEST_USERNAME}" \
+            -d "password=${TEST_PASSWORD}" \
+            -d "grant_type=password" \
+            -d "client_id=shared-web-client" \
+            -d "client_secret=${WEB_CLIENT_SECRET}" 2>/dev/null)
+        
+        if echo "$token_response" | grep -q "access_token"; then
+            check_result "pass" "JWT token generation" "successfully generated for user ${TEST_USERNAME}"
+            
+            # Extract and decode JWT token
+            ACCESS_TOKEN=$(echo "$token_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+            
+            if [ -n "$ACCESS_TOKEN" ]; then
+                # Decode JWT payload (base64 decode the middle part)
+                JWT_PAYLOAD=$(echo "$ACCESS_TOKEN" | cut -d'.' -f2)
+                # Add padding if needed for base64 decode
+                case $((${#JWT_PAYLOAD} % 4)) in
+                    2) JWT_PAYLOAD="${JWT_PAYLOAD}==" ;;
+                    3) JWT_PAYLOAD="${JWT_PAYLOAD}=" ;;
+                esac
+                
+                DECODED_JWT=$(echo "$JWT_PAYLOAD" | base64 -d 2>/dev/null)
+                
+                if [ $? -eq 0 ] && [ -n "$DECODED_JWT" ]; then
+                    check_result "pass" "JWT token decoding" "successfully decoded token payload"
+                    
+                    # Test for realm_access.roles (global roles)
+                    if echo "$DECODED_JWT" | grep -q "realm_access"; then
+                        check_result "pass" "Global realm roles claim" "realm_access.roles present in token"
+                        
+                        if [ "$DEBUG_MODE" = true ]; then
+                            echo -e "${CYAN}   📋 Global roles:${NC}"
+                            echo "$DECODED_JWT" | grep -o '"realm_access":{[^}]*}' | sed 's/.*"roles":\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
+                        fi
+                    else
+                        check_result "fail" "Global realm roles claim" "realm_access.roles missing from token"
+                    fi
+                    
+                    # Test for organization-specific role claims
+                    if echo "$DECODED_JWT" | grep -q "acme-roles"; then
+                        check_result "pass" "ACME filtered roles claim" "acme-roles present in token"
+                        
+                        if [ "$DEBUG_MODE" = true ]; then
+                            echo -e "${CYAN}   📋 ACME roles:${NC}"
+                            echo "$DECODED_JWT" | grep -o '"acme-roles":\[[^]]*\]' | sed 's/.*:\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
+                        fi
+                    else
+                        check_result "fail" "ACME filtered roles claim" "acme-roles missing from token"
+                    fi
+                    
+                    if echo "$DECODED_JWT" | grep -q "xyz-roles"; then
+                        check_result "pass" "XYZ filtered roles claim" "xyz-roles present in token"
+                        
+                        if [ "$DEBUG_MODE" = true ]; then
+                            echo -e "${CYAN}   📋 XYZ roles:${NC}"
+                            echo "$DECODED_JWT" | grep -o '"xyz-roles":\[[^]]*\]' | sed 's/.*:\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
+                        fi
+                    else
+                        check_result "fail" "XYZ filtered roles claim" "xyz-roles missing from token"
+                    fi
+                    
+                    # Test for organization indicators
+                    if echo "$DECODED_JWT" | grep -q "organization_enabled"; then
+                        check_result "pass" "Organization indicators" "organization_enabled present in token"
+                    else
+                        check_result "fail" "Organization indicators" "organization_enabled missing from token"
+                    fi
+                    
+                    # Test for organization membership info
+                    if echo "$DECODED_JWT" | grep -qE "(acme|xyz)"; then
+                        check_result "pass" "Organization membership" "organization-specific claims detected"
+                    else
+                        check_result "fail" "Organization membership" "no organization-specific claims found"
+                    fi
+                    
+                    if [ "$DEBUG_MODE" = true ]; then
+                        echo -e "${CYAN}📋 Complete JWT token payload:${NC}"
+                        echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
+                        echo ""
+                    fi
+                    
+                else
+                    check_result "fail" "JWT token decoding" "could not decode token payload"
+                fi
+            else
+                check_result "fail" "JWT token extraction" "could not extract access_token from response"
+            fi
+            
+        else
+            # Try with a different user (alice)
+            TEST_USERNAME="alice"
+            TEST_PASSWORD="alice123"
+            
+            token_response=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
+                -H "Content-Type: application/x-www-form-urlencoded" \
+                -d "username=${TEST_USERNAME}" \
+                -d "password=${TEST_PASSWORD}" \
+                -d "grant_type=password" \
+                -d "client_id=shared-web-client" \
+                -d "client_secret=${WEB_CLIENT_SECRET}" 2>/dev/null)
+            
+            if echo "$token_response" | grep -q "access_token"; then
+                check_result "pass" "JWT token generation (fallback)" "successfully generated for user ${TEST_USERNAME}"
+            else
+                check_result "fail" "JWT token generation" "failed for both test users"
+                if [ "$DEBUG_MODE" = true ]; then
+                    echo -e "${YELLOW}   🔧 Token response: ${token_response}${NC}"
+                fi
+            fi
+        fi
+    else
+        check_result "fail" "JWT token testing" "no client secret available"
+    fi
+    
+echo ""
+    
+    # Test 16: Organization-aware client scopes
+    echo -e "${YELLOW}Testing organization-aware client scopes...${NC}"
+    
+    scopes_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/client-scopes" \
+        -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+    
+    if echo "$scopes_response" | grep -q "acme-scope"; then
+        check_result "pass" "ACME client scope" "exists and configured"
+    else
+        check_result "fail" "ACME client scope" "not found"
+    fi
+    
+    if echo "$scopes_response" | grep -q "xyz-scope"; then
+        check_result "pass" "XYZ client scope" "exists and configured"
+    else
+        check_result "fail" "XYZ client scope" "not found"
+    fi
+    
+    if [ "$DEBUG_MODE" = true ]; then
+        echo -e "${CYAN}📋 Organization-specific client scopes:${NC}"
+        echo "$scopes_response" | grep -o '"name":"[^"]*scope"' | cut -d'"' -f4 | sed 's/^/   • /'
+        echo ""
+    fi
+    
+else
+    echo -e "${YELLOW}⚠️  Skipping organization-aware features tests - no realm name or admin token${NC}"
+fi
+
+echo ""
+
+# Test 17: LDAP organization groups and role sync
+if [ -n "$REALM_NAME" ]; then
+    echo -e "${YELLOW}Testing LDAP organization groups and role sync...${NC}"
+    
+    # Check for organization-specific groups in LDAP
+    acme_groups=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(cn=acme*)" cn 2>/dev/null | grep -c "cn: acme" || echo 0)
+    xyz_groups=$(docker exec ldap ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=min,dc=io" -w admin -b "ou=groups,dc=min,dc=io" "(cn=xyz*)" cn 2>/dev/null | grep -c "cn: xyz" || echo 0)
+    
+    acme_groups=$(echo "$acme_groups" | tr -d '\n\r')
+    xyz_groups=$(echo "$xyz_groups" | tr -d '\n\r')
+    
+    if [ "$acme_groups" -gt 0 ]; then
+        check_result "pass" "ACME organization groups in LDAP" "${acme_groups} acme_* groups found"
+    else
+        check_result "fail" "ACME organization groups in LDAP" "no acme_* groups found"
+    fi
+    
+    if [ "$xyz_groups" -gt 0 ]; then
+        check_result "pass" "XYZ organization groups in LDAP" "${xyz_groups} xyz_* groups found"
+    else
+        check_result "fail" "XYZ organization groups in LDAP" "no xyz_* groups found"
+    fi
+    
+    # Check for organization-specific roles in Keycloak
+    if [ -n "$admin_token" ]; then
+        roles_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/roles" \
+            -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+        
+        acme_roles_count=$(echo "$roles_response" | grep -o '"name":"acme_[^"]*"' | wc -l)
+        xyz_roles_count=$(echo "$roles_response" | grep -o '"name":"xyz_[^"]*"' | wc -l)
+        
+        acme_roles_count=$(echo "$acme_roles_count" | tr -d '\n\r' | head -1)
+        xyz_roles_count=$(echo "$xyz_roles_count" | tr -d '\n\r' | head -1)
+        
+        if [ "$acme_roles_count" -gt 0 ]; then
+            check_result "pass" "ACME organization roles in Keycloak" "${acme_roles_count} acme_* roles synced"
+        else
+            check_result "fail" "ACME organization roles in Keycloak" "no acme_* roles found"
+        fi
+        
+        if [ "$xyz_roles_count" -gt 0 ]; then
+            check_result "pass" "XYZ organization roles in Keycloak" "${xyz_roles_count} xyz_* roles synced"
+        else
+            check_result "fail" "XYZ organization roles in Keycloak" "no xyz_* roles found"
+        fi
+        
+        if [ "$DEBUG_MODE" = true ]; then
+            echo -e "${CYAN}📋 Organization roles in Keycloak:${NC}"
+            echo "$roles_response" | grep -o '"name":"[^"]*"' | grep -E "(acme_|xyz_)" | cut -d'"' -f4 | sed 's/^/   • /'
+            echo ""
+        fi
+    fi
+fi
+
 echo ""
 echo -e "${BLUE}🎯 Test Summary Complete${NC}"
 if [ -n "$REALM_NAME" ]; then
@@ -393,6 +807,8 @@ if [ -n "$REALM_NAME" ]; then
     echo -e "${GREEN}   • ${MAGENTA}Keycloak${NC} Admin     : ${CYAN}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
     echo -e "${GREEN}   • Realm URL          : ${CYAN}http://localhost:8090/realms/${REALM_NAME}${NC}"
     echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${CYAN}http://localhost:8080${NC}"
+    echo -e "${GREEN}   • Shared Clients     : ${CYAN}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/clients${NC}"
+    echo -e "${GREEN}   • Client Scopes      : ${CYAN}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/client-scopes${NC}"
 else
     echo -e "${GREEN}🌐 Access basic setup:${NC}"
     echo -e "${GREEN}   • ${MAGENTA}Keycloak${NC} Master    : ${CYAN}http://localhost:8090/admin/master/console/${NC}"
