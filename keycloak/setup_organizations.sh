@@ -221,6 +221,12 @@ create_organization_native() {
     "name": "${org_name}",
     "description": "Organization for ${org_prefix} prefixed roles and users",
     "enabled": true,
+    "domains": [
+        {
+            "name": "${org_prefix}.${REALM}.example.com",
+            "verified": false
+        }
+    ],
     "attributes": {
         "role_prefix": ["${org_prefix}"]
     }
@@ -544,6 +550,141 @@ EOF
     done
 }
 
+# Function to create organization-specific test users
+create_organization_test_users() {
+    echo -e "${YELLOW}👤 Creating organization-specific test users for JWT testing...${NC}"
+    
+    # Define test user scenarios using regular arrays (compatible with zsh/older bash)
+    test_users_data=(
+        "test-acme-admin:acme_admin"
+        "test-acme-developer:acme_developer" 
+        "test-acme-user:acme_user"
+        "test-xyz-admin:xyz_admin"
+        "test-xyz-developer:xyz_developer"
+        "test-xyz-user:xyz_user"
+        "test-multi-org:acme_user,xyz_user"
+        "test-no-org:developers"
+    )
+    
+    for user_data in "${test_users_data[@]}"; do
+        username="${user_data%%:*}"
+        roles="${user_data#*:}"
+        echo -e "${BLUE}📝 Creating test user: ${username} with roles: ${roles}${NC}"
+        
+        # Create user
+        USER_CONFIG=$(cat <<EOF
+{
+    "username": "${username}",
+    "firstName": "Test",
+    "lastName": "User ${username}",
+    "email": "${username}@test.local",
+    "enabled": true,
+    "credentials": [
+        {
+            "type": "password",
+            "value": "${username}",
+            "temporary": false
+        }
+    ],
+    "attributes": {
+        "description": ["Organization test user for JWT role verification"]
+    }
+}
+EOF
+)
+
+        HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${USER_CONFIG}" \
+            -o /tmp/test_user_create_response.json)
+        
+        if [ "$HTTP_STATUS" = "201" ]; then
+            echo -e "${GREEN}   ✅ Created test user: ${username}${NC}"
+            
+            # Get user ID
+            USER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}" \
+                -H "Authorization: Bearer ${TOKEN}" | jq -r '.[0].id')
+            
+            if [ "$USER_ID" != "null" ] && [ -n "$USER_ID" ]; then
+                echo -e "${GREEN}   📋 User ID: ${USER_ID}${NC}"
+                
+                # Assign roles
+                IFS=',' read -ra ROLE_ARRAY <<< "$roles"
+                for role in "${ROLE_ARRAY[@]}"; do
+                    assign_role_to_user "$USER_ID" "$username" "$role"
+                done
+            else
+                echo -e "${RED}   ❌ Failed to get user ID for ${username}${NC}"
+            fi
+            
+        elif [ "$HTTP_STATUS" = "409" ]; then
+            echo -e "${YELLOW}   ⚠️  Test user ${username} already exists, updating roles...${NC}"
+            
+            # Get existing user ID
+            USER_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}" \
+                -H "Authorization: Bearer ${TOKEN}" | jq -r '.[0].id')
+            
+            if [ "$USER_ID" != "null" ] && [ -n "$USER_ID" ]; then
+                # Assign roles to existing user
+                IFS=',' read -ra ROLE_ARRAY <<< "$roles"
+                for role in "${ROLE_ARRAY[@]}"; do
+                    assign_role_to_user "$USER_ID" "$username" "$role"
+                done
+            fi
+        else
+            echo -e "${RED}   ❌ Failed to create test user ${username} (HTTP $HTTP_STATUS)${NC}"
+            cat /tmp/test_user_create_response.json 2>/dev/null
+        fi
+    done
+    
+    echo -e "${GREEN}✅ Organization test users created successfully!${NC}"
+}
+
+# Function to assign role to user
+assign_role_to_user() {
+    local user_id=$1
+    local username=$2
+    local role_name=$3
+    
+    echo -e "${YELLOW}     Assigning role ${role_name} to ${username}...${NC}"
+    
+    # Get role ID
+    ROLE_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
+        -H "Authorization: Bearer ${TOKEN}" | jq -r '.id')
+    
+    if [ "$ROLE_ID" = "null" ] || [ -z "$ROLE_ID" ]; then
+        echo -e "${RED}     ❌ Role ${role_name} not found${NC}"
+        return 1
+    fi
+    
+    # Assign role
+    ROLE_ASSIGNMENT=$(cat <<EOF
+[
+    {
+        "id": "${ROLE_ID}",
+        "name": "${role_name}"
+    }
+]
+EOF
+)
+
+    HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${user_id}/role-mappings/realm" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${ROLE_ASSIGNMENT}" \
+        -o /tmp/role_assignment_response.json)
+    
+    if [ "$HTTP_STATUS" = "204" ]; then
+        echo -e "${GREEN}     ✅ Assigned role ${role_name}${NC}"
+    elif [ "$HTTP_STATUS" = "409" ]; then
+        echo -e "${YELLOW}     ⚠️  Role ${role_name} already assigned${NC}"
+    else
+        echo -e "${RED}     ❌ Failed to assign role ${role_name} (HTTP $HTTP_STATUS)${NC}"
+        cat /tmp/role_assignment_response.json 2>/dev/null
+    fi
+}
+
 # Function to display organization setup summary
 display_summary() {
     echo -e "${GREEN}🎉 Organization setup completed successfully!${NC}"
@@ -571,6 +712,18 @@ display_summary() {
     for prefix in "${ORGANIZATION_PREFIXES[@]}"; do
         echo -e "   • ${prefix}_admin, ${prefix}_developer, ${prefix}_user, ${prefix}_manager, ${prefix}_specialist"
     done
+    echo ""
+    
+    echo -e "${GREEN}👤 Organization Test Users Created:${NC}"
+    echo -e "   • test-acme-admin (acme_admin role)"
+    echo -e "   • test-acme-developer (acme_developer role)"
+    echo -e "   • test-acme-user (acme_user role)"
+    echo -e "   • test-xyz-admin (xyz_admin role)"
+    echo -e "   • test-xyz-developer (xyz_developer role)"
+    echo -e "   • test-xyz-user (xyz_user role)"
+    echo -e "   • test-multi-org (acme_user + xyz_user roles)"
+    echo -e "   • test-no-org (developers role only)"
+    echo -e "   💡 Password for all test users: same as username"
     echo ""
     
     echo -e "${GREEN}🌐 Access URLs:${NC}"
@@ -611,6 +764,9 @@ update_ldap_group_mapper
 
 # Create example roles
 create_example_roles
+
+# Create organization-specific test users
+create_organization_test_users
 
 # Display summary
 display_summary

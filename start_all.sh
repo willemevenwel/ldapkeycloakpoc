@@ -15,6 +15,7 @@ START_DIR="$(pwd)"
 
 # Check if realm name parameter is provided
 CHECK_STEPS=false
+USE_DEFAULTS=false
 REALM_NAME=""
 
 # Parse arguments
@@ -23,6 +24,33 @@ while [[ $# -gt 0 ]]; do
         --check-steps)
             CHECK_STEPS=true
             shift
+            ;;
+        --defaults)
+            USE_DEFAULTS=true
+            shift
+            ;;
+        --help|-h)
+            echo -e "${GREEN}LDAP-Keycloak POC Setup Script${NC}"
+            echo -e "${YELLOW}Usage: $0 [realm-name] [options]${NC}"
+            echo ""
+            echo -e "${CYAN}Options:${NC}"
+            echo -e "  --defaults         Use default values for all prompts (fully automated)"
+            echo -e "  --check-steps      Interactive mode with step-by-step confirmations"
+            echo -e "                     Note: --check-steps overrides --defaults"
+            echo -e "  --help, -h         Show this help message"
+            echo ""
+            echo -e "${CYAN}Examples:${NC}"
+            echo -e "  $0 myrealm                         # Create 'myrealm' with prompts"
+            echo -e "  $0 myrealm --defaults              # Create 'myrealm' with all defaults"
+            echo -e "  $0 --defaults                      # Use default realm name and all defaults"
+            echo -e "  $0 myrealm --check-steps           # Interactive mode with confirmations"
+            echo -e "  $0 --defaults --check-steps        # Interactive mode (check-steps wins)"
+            echo ""
+            echo -e "${CYAN}Default Values (when using --defaults):${NC}"
+            echo -e "  • Realm name: myrealm"
+            echo -e "  • Organizations: Yes (acme xyz)"
+            echo -e "  • Load additional users: Yes"
+            exit 0
             ;;
         *)
             if [ -z "$REALM_NAME" ]; then
@@ -34,19 +62,39 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$REALM_NAME" ]; then
-    echo -e "${YELLOW}⚠️  No realm name provided${NC}"
-    echo -e "${YELLOW}Please enter the realm name to create:${NC}"
-    read -p "Realm name: " REALM_NAME
-    
-    if [ -z "$REALM_NAME" ]; then
-        echo -e "${RED}❌ No realm name provided. Exiting.${NC}"
-        exit 1
+    if [ "$CHECK_STEPS" = true ]; then
+        # Always prompt when in check-steps mode, regardless of defaults
+        echo -e "${YELLOW}⚠️  No realm name provided${NC}"
+        echo -e "${YELLOW}Please enter the realm name to create:${NC}"
+        read -p "Realm name: " REALM_NAME
+        
+        if [ -z "$REALM_NAME" ]; then
+            echo -e "${RED}❌ No realm name provided. Exiting.${NC}"
+            exit 1
+        fi
+    elif [ "$USE_DEFAULTS" = true ]; then
+        REALM_NAME="myrealm"
+        echo -e "${CYAN}Using default realm name: ${REALM_NAME}${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No realm name provided${NC}"
+        echo -e "${YELLOW}Please enter the realm name to create:${NC}"
+        read -p "Realm name: " REALM_NAME
+        
+        if [ -z "$REALM_NAME" ]; then
+            echo -e "${RED}❌ No realm name provided. Exiting.${NC}"
+            exit 1
+        fi
     fi
 fi
 
 echo -e "${GREEN}🚀 Starting complete LDAP-Keycloak setup for realm: ${MAGENTA}${REALM_NAME}${NC}"
 if [ "$CHECK_STEPS" = true ]; then
-    echo -e "${CYAN}🔍 Check steps mode enabled - you will be prompted before each step${NC}"
+    echo -e "${CYAN}🔍 Check steps mode enabled - you will be prompted for all confirmations and inputs${NC}"
+    if [ "$USE_DEFAULTS" = true ]; then
+        echo -e "${YELLOW}   Note: --defaults flag overridden by --check-steps${NC}"
+    fi
+elif [ "$USE_DEFAULTS" = true ]; then
+    echo -e "${CYAN}🎯 Defaults mode enabled - using default values for all prompts${NC}"
 fi
 echo -e "${YELLOW}📋 This will execute the following steps:${NC}"
 echo -e "${YELLOW}   1. Start all services (Docker containers)${NC}"
@@ -234,17 +282,36 @@ echo -e "${YELLOW}🏢 Organization Setup (NEW FEATURE)${NC}"
 echo -e "${YELLOW}   This will configure organizations with role prefixes like: acme_admin, xyz_developer${NC}"
 echo -e "${YELLOW}   Organizations enable role filtering by prefix in shared clients${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -en "${CYAN}Do you want to set up organizations? (y/N - default is No): ${NC}"
-read -r setup_organizations
+if [ "$CHECK_STEPS" = true ]; then
+    # Always prompt when in check-steps mode, regardless of defaults
+    echo -en "${CYAN}Do you want to set up organizations? (Y/n - default is Yes): ${NC}"
+    read -r setup_organizations
+elif [ "$USE_DEFAULTS" = true ]; then
+    setup_organizations="y"
+    echo -e "${CYAN}Do you want to set up organizations? (Y/n - default is Yes): ${YELLOW}[using default: Yes]${NC}"
+else
+    echo -en "${CYAN}Do you want to set up organizations? (Y/n - default is Yes): ${NC}"
+    read -r setup_organizations
+fi
 
-if [ "${setup_organizations}" = "Y" ] || [ "${setup_organizations}" = "y" ]; then
+# Default to Yes if no input or if user presses enter
+if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "${setup_organizations}" = "y" ]; then
     echo ""
     echo -e "${YELLOW}🏢 Setting up organizations...${NC}"
     echo -e "${BLUE}💡 Enter organization prefixes (e.g., acme xyz abc)${NC}"
     echo -e "${BLUE}   These will be used for role prefixes like: acme_admin, xyz_developer${NC}"
     echo -e "${BLUE}   Default organizations: acme xyz${NC}"
-    echo -en "${CYAN}Enter organization prefixes (space-separated, or press Enter for defaults): ${NC}"
-    read -r org_prefixes
+    if [ "$CHECK_STEPS" = true ]; then
+        # Always prompt when in check-steps mode, regardless of defaults
+        echo -en "${CYAN}Enter organization prefixes (space-separated, or press Enter for defaults): ${NC}"
+        read -r org_prefixes
+    elif [ "$USE_DEFAULTS" = true ]; then
+        org_prefixes="acme xyz"
+        echo -e "${CYAN}Enter organization prefixes (space-separated, or press Enter for defaults): ${YELLOW}[using defaults: acme xyz]${NC}"
+    else
+        echo -en "${CYAN}Enter organization prefixes (space-separated, or press Enter for defaults): ${NC}"
+        read -r org_prefixes
+    fi
     
     # Use defaults if no input provided
     if [ -z "$org_prefixes" ]; then
@@ -335,7 +402,9 @@ echo -e "${CYAN}🔄 To sync again later, run: ${WHITE}cd keycloak && ./sync_lda
 echo ""
 echo -e "${YELLOW}📖 Usage examples:${NC}"
 echo -e "${YELLOW}   ./start_all.sh my-realm${NC}                    # Full automated setup"
+echo -e "${YELLOW}   ./start_all.sh my-realm --defaults${NC}         # Fully automated with all defaults"
 echo -e "${YELLOW}   ./start_all.sh my-realm --check-steps${NC}      # Interactive mode with confirmations"
+echo -e "${YELLOW}   ./start_all.sh --defaults${NC}                  # Use defaults for realm name and all prompts"
 echo -e "${YELLOW}   ./start_all.sh --check-steps${NC}               # Interactive mode, will prompt for realm name"
 echo ""
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
@@ -354,10 +423,23 @@ echo -e "${YELLOW}💡 Optional: Load additional users and group assignments int
 echo -e "${YELLOW}   This will import additional data from users.ldif and group_assign.ldif${NC}"
 echo -e "${YELLOW}   Run this if you want to add more test users beyond the basic setup${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -en "${CYAN}Do you want to load additional users now? (y/N - default is No): ${NC}"
-read -r run_additional
+if [ "$CHECK_STEPS" = true ]; then
+    # Always prompt when in check-steps mode, regardless of defaults
+    echo -en "${CYAN}Do you want to load additional users now? (y/N - default is No): ${NC}"
+    read -r run_additional
+elif [ "$USE_DEFAULTS" = true ]; then
+    run_additional="y"
+    echo -e "${CYAN}Do you want to load additional users now? (y/N - default is No): ${YELLOW}[using default: Yes]${NC}"
+else
+    echo -en "${CYAN}Do you want to load additional users now? (y/N - default is No): ${NC}"
+    read -r run_additional
+fi
 if [ "${run_additional}" = "Y" ] || [ "${run_additional}" = "y" ]; then
-    "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}"
+    if [ "$USE_DEFAULTS" = true ]; then
+        "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}" --defaults
+    else
+        "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}"
+    fi
     echo ""
     echo -e "${GREEN}✅ Additional users loaded. You may want to re-sync LDAP:${NC}"
     echo -e "${GREEN}   cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"

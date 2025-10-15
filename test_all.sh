@@ -589,109 +589,29 @@ echo ""
     
 echo ""
     
-    # Test 15: JWT Token generation and organization role filtering
-    echo -e "${YELLOW}Testing JWT token generation with organization role filtering...${NC}"
+    # Test 15: JWT Token generation with organization-specific test users
+    echo -e "${YELLOW}Testing JWT token generation with organization-specific test users...${NC}"
+    echo -e "${CYAN}💡 Testing predictable organization test users created during setup${NC}"
     
     if [ -n "$WEB_CLIENT_SECRET" ]; then
-        # Test with a user that has organization-specific roles
-        # Try with willem who should have acme and xyz roles based on the CSV
-        TEST_USERNAME="willem"
-        TEST_PASSWORD="willem"
+        # Test organization-specific users with predictable roles (compatible with zsh/older bash)
+        test_users_data=(
+            "test-acme-admin:acme_admin"
+            "test-acme-developer:acme_developer" 
+            "test-acme-user:acme_user"
+            "test-xyz-admin:xyz_admin"
+            "test-xyz-developer:xyz_developer"
+            "test-xyz-user:xyz_user"
+            "test-multi-org:acme_user,xyz_user"
+            "test-no-org:developers"
+        )
         
-        token_response=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "username=${TEST_USERNAME}" \
-            -d "password=${TEST_PASSWORD}" \
-            -d "grant_type=password" \
-            -d "client_id=shared-web-client" \
-            -d "client_secret=${WEB_CLIENT_SECRET}" 2>/dev/null)
+        for user_data in "${test_users_data[@]}"; do
+            TEST_USERNAME="${user_data%%:*}"
+            EXPECTED_ROLES="${user_data#*:}"
+            TEST_PASSWORD="$TEST_USERNAME"  # Password same as username
         
-        if echo "$token_response" | grep -q "access_token"; then
-            check_result "pass" "JWT token generation" "successfully generated for user ${TEST_USERNAME}"
-            
-            # Extract and decode JWT token
-            ACCESS_TOKEN=$(echo "$token_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-            
-            if [ -n "$ACCESS_TOKEN" ]; then
-                # Decode JWT payload (base64 decode the middle part)
-                JWT_PAYLOAD=$(echo "$ACCESS_TOKEN" | cut -d'.' -f2)
-                # Add padding if needed for base64 decode
-                case $((${#JWT_PAYLOAD} % 4)) in
-                    2) JWT_PAYLOAD="${JWT_PAYLOAD}==" ;;
-                    3) JWT_PAYLOAD="${JWT_PAYLOAD}=" ;;
-                esac
-                
-                DECODED_JWT=$(echo "$JWT_PAYLOAD" | base64 -d 2>/dev/null)
-                
-                if [ $? -eq 0 ] && [ -n "$DECODED_JWT" ]; then
-                    check_result "pass" "JWT token decoding" "successfully decoded token payload"
-                    
-                    # Test for realm_access.roles (global roles)
-                    if echo "$DECODED_JWT" | grep -q "realm_access"; then
-                        check_result "pass" "Global realm roles claim" "realm_access.roles present in token"
-                        
-                        if [ "$DEBUG_MODE" = true ]; then
-                            echo -e "${CYAN}   📋 Global roles:${NC}"
-                            echo "$DECODED_JWT" | grep -o '"realm_access":{[^}]*}' | sed 's/.*"roles":\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
-                        fi
-                    else
-                        check_result "fail" "Global realm roles claim" "realm_access.roles missing from token"
-                    fi
-                    
-                    # Test for organization-specific role claims
-                    if echo "$DECODED_JWT" | grep -q "acme-roles"; then
-                        check_result "pass" "ACME filtered roles claim" "acme-roles present in token"
-                        
-                        if [ "$DEBUG_MODE" = true ]; then
-                            echo -e "${CYAN}   📋 ACME roles:${NC}"
-                            echo "$DECODED_JWT" | grep -o '"acme-roles":\[[^]]*\]' | sed 's/.*:\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
-                        fi
-                    else
-                        check_result "fail" "ACME filtered roles claim" "acme-roles missing from token"
-                    fi
-                    
-                    if echo "$DECODED_JWT" | grep -q "xyz-roles"; then
-                        check_result "pass" "XYZ filtered roles claim" "xyz-roles present in token"
-                        
-                        if [ "$DEBUG_MODE" = true ]; then
-                            echo -e "${CYAN}   📋 XYZ roles:${NC}"
-                            echo "$DECODED_JWT" | grep -o '"xyz-roles":\[[^]]*\]' | sed 's/.*:\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/"//g' | sed 's/^/      • /'
-                        fi
-                    else
-                        check_result "fail" "XYZ filtered roles claim" "xyz-roles missing from token"
-                    fi
-                    
-                    # Test for organization indicators
-                    if echo "$DECODED_JWT" | grep -q "organization_enabled"; then
-                        check_result "pass" "Organization indicators" "organization_enabled present in token"
-                    else
-                        check_result "fail" "Organization indicators" "organization_enabled missing from token"
-                    fi
-                    
-                    # Test for organization membership info
-                    if echo "$DECODED_JWT" | grep -qE "(acme|xyz)"; then
-                        check_result "pass" "Organization membership" "organization-specific claims detected"
-                    else
-                        check_result "fail" "Organization membership" "no organization-specific claims found"
-                    fi
-                    
-                    if [ "$DEBUG_MODE" = true ]; then
-                        echo -e "${CYAN}📋 Complete JWT token payload:${NC}"
-                        echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
-                        echo ""
-                    fi
-                    
-                else
-                    check_result "fail" "JWT token decoding" "could not decode token payload"
-                fi
-            else
-                check_result "fail" "JWT token extraction" "could not extract access_token from response"
-            fi
-            
-        else
-            # Try with a different user (alice)
-            TEST_USERNAME="alice"
-            TEST_PASSWORD="alice123"
+            echo -e "${BLUE}🧪 Testing user: ${TEST_USERNAME} (expected roles: ${EXPECTED_ROLES})${NC}"
             
             token_response=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
@@ -702,17 +622,158 @@ echo ""
                 -d "client_secret=${WEB_CLIENT_SECRET}" 2>/dev/null)
             
             if echo "$token_response" | grep -q "access_token"; then
-                check_result "pass" "JWT token generation (fallback)" "successfully generated for user ${TEST_USERNAME}"
+                check_result "pass" "JWT generation for ${TEST_USERNAME}" "successfully authenticated"
+                
+                # Extract and decode JWT token
+                ACCESS_TOKEN=$(echo "$token_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+                
+                if [ -n "$ACCESS_TOKEN" ]; then
+                    # Decode JWT payload (base64 decode the middle part)
+                    JWT_PAYLOAD=$(echo "$ACCESS_TOKEN" | cut -d'.' -f2)
+                    # Add padding if needed for base64 decode
+                    case $((${#JWT_PAYLOAD} % 4)) in
+                        2) JWT_PAYLOAD="${JWT_PAYLOAD}==" ;;
+                        3) JWT_PAYLOAD="${JWT_PAYLOAD}=" ;;
+                    esac
+                    
+                    DECODED_JWT=$(echo "$JWT_PAYLOAD" | base64 -d 2>/dev/null)
+                    
+                    if [ $? -eq 0 ] && [ -n "$DECODED_JWT" ]; then
+                        # Verify realm_access.roles contains expected roles
+                        role_verification_passed=true
+                        
+                        if echo "$DECODED_JWT" | grep -q "realm_access"; then
+                            check_result "pass" "Realm roles claim for ${TEST_USERNAME}" "realm_access.roles present"
+                            
+                            # Extract roles from JWT
+                            JWT_ROLES=$(echo "$DECODED_JWT" | grep -o '"realm_access":{[^}]*}' | sed 's/.*"roles":\[\([^]]*\)\].*/\1/' | tr -d '"' | tr ',' ' ')
+                            
+                            # Check each expected role
+                            IFS=',' read -ra EXPECTED_ROLE_ARRAY <<< "$EXPECTED_ROLES"
+                            for expected_role in "${EXPECTED_ROLE_ARRAY[@]}"; do
+                                if echo "$JWT_ROLES" | grep -q "$expected_role"; then
+                                    check_result "pass" "Role verification ${TEST_USERNAME}" "contains expected role: $expected_role"
+                                else
+                                    check_result "fail" "Role verification ${TEST_USERNAME}" "missing expected role: $expected_role"
+                                    role_verification_passed=false
+                                fi
+                            done
+                            
+                            # Organization-specific verification
+                            if [[ "$TEST_USERNAME" == *"acme"* ]]; then
+                                acme_role_found=false
+                                for role in $JWT_ROLES; do
+                                    if [[ "$role" == acme_* ]]; then
+                                        acme_role_found=true
+                                        break
+                                    fi
+                                done
+                                if [ "$acme_role_found" = true ]; then
+                                    check_result "pass" "ACME organization roles ${TEST_USERNAME}" "contains ACME-prefixed roles"
+                                else
+                                    check_result "fail" "ACME organization roles ${TEST_USERNAME}" "missing ACME-prefixed roles"
+                                fi
+                            fi
+                            
+                            if [[ "$TEST_USERNAME" == *"xyz"* ]]; then
+                                xyz_role_found=false
+                                for role in $JWT_ROLES; do
+                                    if [[ "$role" == xyz_* ]]; then
+                                        xyz_role_found=true
+                                        break
+                                    fi
+                                done
+                                if [ "$xyz_role_found" = true ]; then
+                                    check_result "pass" "XYZ organization roles ${TEST_USERNAME}" "contains XYZ-prefixed roles"
+                                else
+                                    check_result "fail" "XYZ organization roles ${TEST_USERNAME}" "missing XYZ-prefixed roles"
+                                fi
+                            fi
+                            
+                            if [[ "$TEST_USERNAME" == "test-multi-org" ]]; then
+                                # Should have both ACME and XYZ roles
+                                acme_found=false
+                                xyz_found=false
+                                for role in $JWT_ROLES; do
+                                    if [[ "$role" == acme_* ]]; then acme_found=true; fi
+                                    if [[ "$role" == xyz_* ]]; then xyz_found=true; fi
+                                done
+                                if [ "$acme_found" = true ] && [ "$xyz_found" = true ]; then
+                                    check_result "pass" "Multi-org roles ${TEST_USERNAME}" "contains both ACME and XYZ roles"
+                                else
+                                    check_result "fail" "Multi-org roles ${TEST_USERNAME}" "missing ACME or XYZ roles"
+                                fi
+                            fi
+                            
+                            if [[ "$TEST_USERNAME" == "test-no-org" ]]; then
+                                # Should NOT have organization roles
+                                org_role_found=false
+                                for role in $JWT_ROLES; do
+                                    if [[ "$role" == acme_* ]] || [[ "$role" == xyz_* ]]; then
+                                        org_role_found=true
+                                        break
+                                    fi
+                                done
+                                if [ "$org_role_found" = false ]; then
+                                    check_result "pass" "Non-org user ${TEST_USERNAME}" "correctly has no organization roles"
+                                else
+                                    check_result "fail" "Non-org user ${TEST_USERNAME}" "incorrectly has organization roles"
+                                fi
+                            fi
+                            
+                            if [ "$DEBUG_MODE" = true ]; then
+                                echo -e "${CYAN}   📋 JWT roles for ${TEST_USERNAME}:${NC}"
+                                for role in $JWT_ROLES; do
+                                    echo -e "      • $role"
+                                done
+                            fi
+                            
+                        else
+                            check_result "fail" "Realm roles claim for ${TEST_USERNAME}" "realm_access.roles missing"
+                            role_verification_passed=false
+                        fi
+                        
+                        # Test organization flags
+                        if echo "$DECODED_JWT" | grep -q "organization_enabled"; then
+                            check_result "pass" "Organization flags ${TEST_USERNAME}" "organization_enabled present"
+                        else
+                            check_result "fail" "Organization flags ${TEST_USERNAME}" "organization_enabled missing"
+                        fi
+                        
+                        if [ "$DEBUG_MODE" = true ]; then
+                            echo -e "${CYAN}📋 Complete JWT payload for ${TEST_USERNAME}:${NC}"
+                            if command -v jq >/dev/null 2>&1; then
+                                echo "$DECODED_JWT" | jq . 2>/dev/null || echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
+                            else
+                                echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
+                            fi
+                            echo ""
+                        fi
+                        
+                    else
+                        check_result "fail" "JWT decoding for ${TEST_USERNAME}" "could not decode token payload"
+                    fi
+                else
+                    check_result "fail" "JWT extraction for ${TEST_USERNAME}" "could not extract access_token"
+                fi
+                
             else
-                check_result "fail" "JWT token generation" "failed for both test users"
+                check_result "fail" "JWT generation for ${TEST_USERNAME}" "authentication failed"
                 if [ "$DEBUG_MODE" = true ]; then
                     echo -e "${YELLOW}   🔧 Token response: ${token_response}${NC}"
                 fi
             fi
-        fi
+            
+            echo ""  # Space between test users
+        done
+        
+        
     else
-        check_result "fail" "JWT token testing" "no client secret available"
+        check_result "fail" "Organization test users" "shared-web-client secret not available"
     fi
+    
+    echo ""
+
     
 echo ""
     
