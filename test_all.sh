@@ -485,6 +485,74 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
             check_result "fail" "Organizations UI availability" "requirements not met - UI will not be visible"
         fi
         
+        # Test 7: Organization Identity Provider linking
+        if [ "$org_api_response" = "200" ] && [ -f /tmp/org_api_check.json ]; then
+            org_count=$(cat /tmp/org_api_check.json | grep -o '"id"' | wc -l | tr -d ' ')
+            
+            if [ "$org_count" -gt 0 ]; then
+                echo -e "${YELLOW}Testing organization Identity Provider linking...${NC}"
+                
+                # Get list of organizations
+                organizations=$(cat /tmp/org_api_check.json)
+                
+                # Check if organization-specific Mock OAuth2 IdPs exist at realm level
+                all_idps_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/identity-provider/instances" \
+                    -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
+                
+                mock_idp_count=$(echo "$all_idps_response" | grep -o '"alias":"mock-oauth2-[^"]*"' | wc -l | tr -d ' ')
+                
+                if [ "$mock_idp_count" -gt 0 ]; then
+                    check_result "pass" "Mock OAuth2 Identity Providers" "${mock_idp_count} organization-specific IdPs configured"
+                    
+                    # Test each organization for IdP linking
+                    org_with_idp_count=0
+                    total_orgs=0
+                    
+                    # Parse organization IDs and names
+                    if command -v jq >/dev/null 2>&1; then
+                        org_ids=$(echo "$organizations" | jq -r '.[].id' 2>/dev/null)
+                        org_names=$(echo "$organizations" | jq -r '.[].name' 2>/dev/null)
+                        
+                        for org_id in $org_ids; do
+                            total_orgs=$((total_orgs + 1))
+                            
+                            # Check if organization has any Mock OAuth2 IdP linked
+                            org_idp_response=$(curl -s -w "%{http_code}" -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/organizations/${org_id}/identity-providers" \
+                                -H "Authorization: Bearer ${admin_token}" \
+                                -o /tmp/org_idp_check.json 2>/dev/null)
+                            
+                            if [ "$org_idp_response" = "200" ]; then
+                                # Check if any mock-oauth2 IdP is in the response
+                                if grep -q "mock-oauth2-" /tmp/org_idp_check.json 2>/dev/null; then
+                                    org_with_idp_count=$((org_with_idp_count + 1))
+                                fi
+                            fi
+                        done
+                        
+                        if [ "$org_with_idp_count" -gt 0 ]; then
+                            check_result "pass" "Organizations with Mock OAuth2 IdP" "${org_with_idp_count}/${total_orgs} organizations have IdP linked"
+                        else
+                            check_result "fail" "Organizations with Mock OAuth2 IdP" "no organizations have IdP linked"
+                            if [ "$DEBUG_MODE" = true ]; then
+                                echo -e "${YELLOW}   💡 Check configure_mock_oauth2_idp.sh script execution${NC}"
+                                echo -e "${YELLOW}   💡 Organizations should show Mock OAuth2 in their Identity Providers section${NC}"
+                            fi
+                        fi
+                        
+                        # Clean up temp file
+                        rm -f /tmp/org_idp_check.json 2>/dev/null
+                    else
+                        check_result "warn" "Organizations IdP linking test" "jq not available - skipping detailed test"
+                    fi
+                else
+                    check_result "fail" "Mock OAuth2 Identity Providers" "no organization-specific IdPs found"
+                    if [ "$DEBUG_MODE" = true ]; then
+                        echo -e "${YELLOW}   💡 Run configure_mock_oauth2_idp.sh to set up organization-specific Mock OAuth2 IdPs${NC}"
+                    fi
+                fi
+            fi
+        fi
+
         # Cleanup temporary files
         rm -f /tmp/org_api_check.json 2>/dev/null
         

@@ -213,17 +213,19 @@ check_organizations_feature() {
 create_organization_native() {
     local org_prefix=$1
     local org_name=$(echo "${org_prefix}" | tr '[:lower:]' '[:upper:]')
+    local org_alias=$(echo "${org_prefix}" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
     
-    echo -e "${YELLOW}🏢 Creating organization: ${org_name} (prefix: ${org_prefix})...${NC}"
+    echo -e "${YELLOW}🏢 Creating organization: ${org_name} (prefix: ${org_prefix}, alias: ${org_alias})...${NC}"
     
     ORG_CONFIG=$(cat <<EOF
 {
     "name": "${org_name}",
+    "alias": "${org_alias}",
     "description": "Organization for ${org_prefix} prefixed roles and users",
     "enabled": true,
     "domains": [
         {
-            "name": "${org_prefix}.${REALM}.example.com",
+            "name": "${org_prefix}.${REALM}.local",
             "verified": false
         }
     ],

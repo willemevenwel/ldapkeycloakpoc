@@ -97,13 +97,16 @@ elif [ "$USE_DEFAULTS" = true ]; then
     echo -e "${CYAN}🎯 Defaults mode enabled - using default values for all prompts${NC}"
 fi
 echo -e "${YELLOW}📋 This will execute the following steps:${NC}"
-echo -e "${YELLOW}   1. Start all services (Docker containers)${NC}"
+echo -e "${YELLOW}   1. Start all services (Docker containers + Mock OAuth2)${NC}"
 echo -e "${YELLOW}   1.5. Generate and load initial LDAP data${NC}"
 echo -e "${YELLOW}   1.9. Check Keycloak server details and existing realms${NC}"
 echo -e "${YELLOW}   2. Create Keycloak realm: ${REALM_NAME}${NC}"
 echo -e "${YELLOW}   3. Add LDAP provider${NC}"
 echo -e "${YELLOW}   4. Create role mapper for LDAP groups${NC}"
 echo -e "${YELLOW}   5. Sync users and roles from LDAP${NC}"
+echo -e "${YELLOW}   6. Setup organizations with domain format: org.realm.local${NC}"
+echo -e "${YELLOW}   7. Configure shared clients with organization role filtering${NC}"
+echo -e "${YELLOW}   8. Configure Mock OAuth2 as Identity Provider for org testing${NC}"
 
 echo ""
 
@@ -338,6 +341,14 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     check_success
     echo -e "${GREEN}✅ Shared clients configured successfully${NC}"
     
+    # Step 8: Configure Mock OAuth2 as Identity Provider
+    echo ""
+    confirm_step "About to configure Mock OAuth2 Server as Identity Provider for organization testing"
+    echo -e "${GREEN}🔄 Step 8: Configuring Mock OAuth2 Identity Provider...${NC}"
+    ./configure_mock_oauth2_idp.sh "${REALM_NAME}" ${org_prefixes}
+    check_success
+    echo -e "${GREEN}✅ Mock OAuth2 Identity Provider configured successfully${NC}"
+    
     # Return to start directory
     cd "$START_DIR"
     
@@ -345,9 +356,11 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo -e "${GREEN}🎉 Organization setup completed!${NC}"
     echo -e "${YELLOW}📋 Organization Summary:${NC}"
     echo -e "${YELLOW}   • Organizations created: ${org_prefixes}${NC}"
+    echo -e "${YELLOW}   • Domain format: {org}.${REALM_NAME}.local${NC}"
     echo -e "${YELLOW}   • Shared clients: shared-web-client, shared-api-client${NC}"
     echo -e "${YELLOW}   • Role filtering: JWT tokens contain org-specific claims${NC}"
     echo -e "${YELLOW}   • LDAP groups matching org prefixes will sync automatically${NC}"
+    echo -e "${YELLOW}   • Mock OAuth2 Identity Provider: Configured for org testing${NC}"
     echo ""
     ORGANIZATIONS_CONFIGURED=true
 else
@@ -362,25 +375,32 @@ fi
 echo -e "${GREEN}🎉 Complete setup finished successfully!${NC}"
 echo ""
 echo -e "${YELLOW}📋 Setup Summary for realm '${REALM_NAME}':${NC}"
-echo -e "${YELLOW}   • All Docker services are running${NC}"
+echo -e "${YELLOW}   • All Docker services are running (including Mock OAuth2)${NC}"
 echo -e "${YELLOW}   • LDAP server populated with users and groups${NC}"
 echo -e "${YELLOW}   • Keycloak realm '${REALM_NAME}' created${NC}"
 echo -e "${YELLOW}   • LDAP provider 'ldap-provider-${REALM_NAME}' configured${NC}"
 echo -e "${YELLOW}   • Role mapper 'role-mapper-${REALM_NAME}' configured${NC}"
 echo -e "${YELLOW}   • Users and roles synced from LDAP to Keycloak${NC}"
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
-    echo -e "${YELLOW}   • Organizations configured: ${org_prefixes}${NC}"
+    echo -e "${YELLOW}   • Organizations configured: ${org_prefixes} (domains: {org}.${REALM_NAME}.local)${NC}"
     echo -e "${YELLOW}   • Shared clients with role filtering configured${NC}"
+    echo -e "${YELLOW}   • Mock OAuth2 Identity Provider configured for multi-provider testing${NC}"
 fi
 echo ""
 echo -e "${GREEN}🌐 Access your setup:${NC}"
+echo -e "${GREEN}   • ${YELLOW}🚀 POC Dashboard${NC}     : ${BLUE}http://localhost:8888${NC}"
+echo -e "${GREEN}     └─ ${WHITE}Complete overview with all service links & credentials${NC}"
 echo -e "${GREEN}   • Keycloak Admin     : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
 echo -e "${GREEN}   • Realm URL          : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${GREEN}   • Organizations      : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/organizations${NC}"
     echo -e "${GREEN}   • Clients            : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/clients${NC}"
 fi
-echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${BLUE}http://localhost:8091${NC}"
+echo -e "${GREEN}   • ${CYAN}LDAP${NC} Web Manager   : ${BLUE}http://localhost:8080${NC}"
+echo -e "${GREEN}   • ${YELLOW}Weave Scope${NC}       : ${BLUE}http://localhost:4040${NC}"
+echo -e "${GREEN}     └─ Real-time network topology and container visualization${NC}"
+echo -e "${GREEN}   • ${WHITE}Mock OAuth2${NC}       : ${BLUE}http://localhost:8081${NC}"
+echo -e "${GREEN}     └─ OAuth2/OIDC testing server for integration development${NC}"
 echo ""
 echo -e "${GREEN}🔑 Admin credentials:${NC}"
 echo -e "${GREEN}   • Keycloak Realm Admin: admin-${REALM_NAME} / admin-${REALM_NAME}${NC}"
@@ -412,6 +432,9 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${CYAN}   • JWT tokens contain organization-specific role claims${NC}"
     echo -e "${CYAN}   • Shared clients: shared-web-client, shared-api-client${NC}"
     echo -e "${CYAN}   • Role filtering by organization prefix in JWT tokens${NC}"
+    echo -e "${CYAN}   • Organization domains: {org}.${REALM_NAME}.local format${NC}"
+    echo -e "${CYAN}   • Mock OAuth2 Identity Provider for multi-provider testing${NC}"
+    echo -e "${CYAN}   • Organization-specific OAuth2 clients configured${NC}"
     echo -e "${CYAN}   • View organization setup guide: ./keycloak/organization_setup_guide.sh${NC}"
     echo ""
 fi
@@ -448,4 +471,20 @@ else
     echo -e "${YELLOW}   ./ldap/load_additional_users.sh${NC}"
     echo -e "${YELLOW}   Then re-sync with: cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
 fi
+
+echo ""
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}🎉 SETUP COMPLETE! Your LDAP-Keycloak POC is ready!${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "${WHITE}🚀 ${GREEN}START HERE:${NC} ${BLUE}http://localhost:8888${NC}"
+echo -e "${YELLOW}   └─ Complete dashboard with all services, links, and credentials${NC}"
+echo ""
+echo -e "${CYAN}💡 The dashboard provides centralized access to:${NC}"
+echo -e "${CYAN}   • Keycloak Admin Console (realm: ${REALM_NAME})${NC}"
+echo -e "${CYAN}   • LDAP Web Manager${NC}"
+echo -e "${CYAN}   • Weave Scope Network Visualization${NC}"
+echo -e "${CYAN}   • All login credentials with security warnings${NC}"
+echo ""
+echo -e "${GREEN}Happy testing with your LDAP-Keycloak integration! 🔐✨${NC}"
 
