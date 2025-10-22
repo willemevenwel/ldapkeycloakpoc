@@ -44,7 +44,15 @@ ldapkeycloakpoc/
 ├── keycloak/                   # Keycloak management scripts
 │   ├── create_realm.sh         # Create new Keycloak realms
 │   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
-│   └── debug_realm_ldap.sh     # Debug realm and LDAP provider status
+│   ├── configure_mock_oauth2_idp.sh       # Configure Mock OAuth2 Identity Provider
+│   ├── configure_shared_clients.sh        # Create organization-aware shared clients
+│   ├── debug_realm_ldap.sh     # Debug realm and LDAP provider status
+│   ├── keycloak_details.sh     # Show Keycloak server status and configuration
+│   ├── keycloak_setup_full.sh  # Complete Keycloak setup (realm, LDAP, organizations)
+│   ├── organization_setup_guide.sh        # Interactive guide for organization features
+│   ├── setup_organizations.sh  # Configure organizations with domain mapping
+│   ├── sync_ldap.sh            # Synchronize LDAP users and roles with Keycloak
+│   └── update_role_mapper.sh   # Update LDAP role mapper configuration
 ├── ldap/
 │   ├── setup_ldap_data.sh      # LDAP container startup script  
 │   └── load_additional_users.sh # Load additional users after startup
@@ -436,6 +444,107 @@ dc=mycompany,dc=local
     ├── cn=admins,ou=groups,dc=mycompany,dc=local
     └── cn=developers,ou=groups,dc=mycompany,dc=local
 ```
+
+## Keycloak Script Reference
+
+The `keycloak/` directory contains specialized scripts for managing Keycloak configuration:
+
+> **🤖 Automation Status:** Scripts marked with ✅ are automatically executed by `start_all.sh`. Scripts marked with 🔧 are for manual use only.
+
+### Core Setup Scripts
+
+**✅ `keycloak_setup_full.sh <realm-name> [--check-steps] [--defaults]`** *(Master setup script - Auto-executed)*
+- Complete Keycloak setup orchestrator called by `start_all.sh`
+- Executes all realm creation, LDAP integration, and organization setup
+- Supports interactive (`--check-steps`) and automated (`--defaults`) modes
+- Consolidates all Keycloak configuration into a single modular script
+
+**✅ `create_realm.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Creates a new Keycloak realm with basic configuration
+- Sets up realm-specific admin user and role mappings
+- Configures default client scopes and protocol mappers
+
+**✅ `add_ldap_provider_for_keycloak.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Configures LDAP user federation provider in the specified realm
+- Sets up connection parameters, search bases, and authentication
+- Creates role and group mappers for LDAP synchronization
+
+**✅ `sync_ldap.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Synchronizes users and roles from LDAP to Keycloak
+- Triggers full user import and role mapping updates
+- Provides detailed status reporting and error handling
+
+### Organization & Advanced Features
+
+**✅ `setup_organizations.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Configures Keycloak Organizations feature (requires Keycloak 26+)
+- Creates organizations with domain mapping (e.g., `acme.realm.local`)
+- Sets up organization-specific role filtering and management
+
+**✅ `configure_shared_clients.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Creates shared clients with organization-aware role filtering
+- Configures protocol mappers for organization detection in JWT tokens
+- Sets up client scopes for multi-organization support
+
+**✅ `configure_mock_oauth2_idp.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Configures Mock OAuth2 server as external Identity Provider
+- Creates organization-specific OAuth2 clients and mappers
+- Enables multi-provider authentication testing scenarios
+
+### Debugging & Maintenance
+
+**🔧 `debug_realm_ldap.sh <realm-name>`** *(Manual use only)*
+- Simple diagnostics for realm and LDAP provider status
+- Tests basic connectivity and displays provider information
+- Useful for manual troubleshooting (not called by automated scripts)
+
+**✅ `keycloak_details.sh`** *(Auto-executed via keycloak_setup_full for status checks)*
+- Shows Keycloak server status, version, and configuration
+- Lists all realms and their basic properties
+- Displays enabled features and extension information
+
+**🔧 `organization_setup_guide.sh`** *(Interactive guide only)*
+- Displays organization setup concepts and step-by-step instructions
+- Educational resource for understanding organization features
+- Not executed automatically - run manually for guidance
+
+### Mapper Configuration
+
+**✅ `update_role_mapper.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Updates LDAP role mapper configuration and filters
+- Modifies role synchronization patterns and group mappings
+- Useful for adjusting which LDAP groups sync as Keycloak roles
+
+### Usage Examples
+
+```bash
+# Complete Keycloak setup (recommended - used by start_all.sh)
+./keycloak/keycloak_setup_full.sh mycompany                    # Interactive mode
+./keycloak/keycloak_setup_full.sh mycompany --defaults         # Automated mode
+./keycloak/keycloak_setup_full.sh mycompany --check-steps      # Step-by-step confirmation
+
+# Individual component setup (manual/advanced usage)
+./keycloak/create_realm.sh mycompany
+./keycloak/add_ldap_provider_for_keycloak.sh mycompany
+./keycloak/sync_ldap.sh mycompany
+
+# Organization-specific setup (manual/advanced usage)
+./keycloak/setup_organizations.sh mycompany acme xyz
+./keycloak/configure_shared_clients.sh mycompany acme xyz
+./keycloak/configure_mock_oauth2_idp.sh mycompany acme xyz
+
+# Debugging and maintenance
+./keycloak/debug_realm_ldap.sh mycompany
+./keycloak/keycloak_details.sh
+./keycloak/organization_setup_guide.sh
+```
+
+### Script Organization Summary
+
+- **🤖 Master Script (1):** `keycloak_setup_full.sh` - Complete setup orchestrator called by `start_all.sh`
+- **⚙️ Component Scripts (8):** Individual Keycloak configuration components executed by master script
+- **🔧 Manual Tools (2):** Troubleshooting and interactive guidance utilities
+- **📁 Total:** 11 focused, functional scripts with clear modular architecture
 
 ## User and Group Management
 
@@ -945,6 +1054,45 @@ By removing the `.git` directory, the code becomes part of your main repository 
 - **OpenLDAP**: The LDAP server implementation
 - **Alpine Linux**: Minimal container base image
 - **Docker**: Containerization platform
+
+## Testing and Verification
+
+### JWT Token Verification
+
+The `verify_jwt_roles.sh` script validates JWT tokens and role assignments:
+
+```bash
+# Test specific users with custom realm
+./verify_jwt_roles.sh capgemini willem alice bob
+
+# Use defaults flag to test with willem and louis
+./verify_jwt_roles.sh capgemini --defaults
+
+# Or with --defaults first for default realm
+./verify_jwt_roles.sh --defaults
+
+# Works with any realm name
+./verify_jwt_roles.sh myrealm alice charlie
+```
+
+**Features:**
+- 🔄 **CSV Password Support**: Automatically reads passwords from `data/users.csv`
+- 🎯 **Flexible Users**: Test any combination of users (CSV or non-CSV)
+- 🏢 **Realm Agnostic**: Works with any Keycloak realm name
+- 🔍 **JWT Decoding**: Base64 decodes and displays token contents
+- ✅ **Role Validation**: Shows assigned roles for each user
+
+### Complete Integration Testing
+
+Run the full test suite:
+
+```bash
+# Test all components with specific realm
+./test_all.sh capgemini
+
+# Test with default realm
+./test_all.sh
+```
 
 ## License
 
