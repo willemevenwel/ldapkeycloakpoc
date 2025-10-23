@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# JWT role verification script for any realm
-# This script verifies JWT tokens contain expected roles and organization flags
-# Usage: ./verify_jwt_roles.sh <realm-name>
-# Examples:
-#   ./verify_jwt_roles.sh capgemini
-#   ./verify_jwt_roles.sh walmart
-#   ./verify_jwt_roles.sh mycompany
+# JWT Role Verification Script for LDAP-Keycloak POC
+# 
+# This script tests JWT tokens and role assignments for users in a Keycloak realm
+# that is integrated with LDAP user federation.
+# Usage: ./test_jwt.sh <realm-name>
+# 
+#   ./test_jwt.sh capgemini
+#   ./test_jwt.sh walmart
+#   ./test_jwt.sh mycompany
 
 echo "========================================="
 echo "JWT ROLE VERIFICATION"
@@ -82,32 +84,36 @@ DEFAULTS_MODE=false
 if [ "$1" = "--defaults" ]; then
     DEFAULTS_MODE=true
     REALM_NAME="capgemini"
-    USERS=("willem" "louis")
+    USERS=("test-acme-admin" "test-xyz-user" "test-multi-org")
     echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, users=[${USERS[*]}]${NC}"
 elif [ "$#" -ge 2 ] && [ "${!#}" = "--defaults" ]; then
     # --defaults is the last argument
     DEFAULTS_MODE=true
     REALM_NAME="$1"
-    USERS=("willem" "louis")
+    # TODO: Normalize realm name to lowercase for consistency (disabled for existing realm)
+    # REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
+    USERS=("test-acme-admin" "test-xyz-user" "test-multi-org")
     echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, users=[${USERS[*]}]${NC}"
 elif [ $# -lt 2 ]; then
     echo -e "${RED}❌ Error: Insufficient arguments${NC}"
     echo ""
     echo -e "${YELLOW}Usage:${NC}"
-    echo -e "${YELLOW}  $0 --defaults                           # Use capgemini realm with willem and louis${NC}"
+    echo -e "${YELLOW}  $0 --defaults                           # Use capgemini realm with test-acme-admin, test-xyz-user, test-multi-org${NC}"
     echo -e "${YELLOW}  $0 <realm-name> --defaults              # Custom realm with default users${NC}"
     echo -e "${YELLOW}  $0 <realm-name> <user1> [user2] [...]   # Custom realm and users${NC}"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "${YELLOW}  $0 --defaults${NC}"
     echo -e "${YELLOW}  $0 capgemini --defaults${NC}"
-    echo -e "${YELLOW}  $0 capgemini willem louis${NC}"
+    echo -e "${YELLOW}  $0 capgemini test-acme-admin test-xyz-user${NC}"
     echo -e "${YELLOW}  $0 capgemini alice bob charlie${NC}"
     echo -e "${YELLOW}  $0 walmart alice bob charlie${NC}"
     echo -e "${YELLOW}  $0 mycompany john${NC}"
     exit 1
 else
     REALM_NAME="$1"
+    # TODO: Normalize realm name to lowercase for consistency (disabled for existing realm)
+    # REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
     shift  # Remove first argument (realm name)
     USERS=("$@")  # Remaining arguments are users
     echo -e "${BLUE}🏰 Using realm: ${REALM_NAME}${NC}"

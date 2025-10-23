@@ -86,7 +86,7 @@ echo -e "✅ ${CYAN}LDAP${NC} containers are running"
 # Generate additional users LDIF
 
 echo "📝 Generating LDIF for additional users using containerized Python..."
-docker exec python-bastion python python/csv_to_ldif.py data/users.csv
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/users.csv
 
 if [ $? -ne 0 ]; then
     echo "❌ Error: Failed to generate additional users LDIF"

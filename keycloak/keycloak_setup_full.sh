@@ -9,6 +9,17 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Get script directory for relative imports
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source network detection utility
+if [ -f "${SCRIPT_DIR}/../network_detect.sh" ]; then
+    source "${SCRIPT_DIR}/../network_detect.sh"
+else
+    echo -e "${RED}❌ Network detection utility not found${NC}"
+    exit 1
+fi
+
 # Keycloak Full Setup Script
 # This script handles all Keycloak configuration tasks extracted from start_all.sh
 
@@ -238,11 +249,12 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
 fi
 echo ""
 echo -e "${GREEN}🌐 Access your Keycloak setup:${NC}"
-echo -e "${GREEN}   • Keycloak Admin     : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/${NC}"
-echo -e "${GREEN}   • Realm URL          : ${BLUE}http://localhost:8090/realms/${REALM_NAME}${NC}"
+KEYCLOAK_DISPLAY_URL="$(get_keycloak_url)"
+echo -e "${GREEN}   • Keycloak Admin     : ${BLUE}${KEYCLOAK_DISPLAY_URL}/admin/${REALM_NAME}/console/${NC}"
+echo -e "${GREEN}   • Realm URL          : ${BLUE}${KEYCLOAK_DISPLAY_URL}/realms/${REALM_NAME}${NC}"
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
-    echo -e "${GREEN}   • Organizations      : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/organizations${NC}"
-    echo -e "${GREEN}   • Clients            : ${BLUE}http://localhost:8090/admin/${REALM_NAME}/console/#/${REALM_NAME}/clients${NC}"
+    echo -e "${GREEN}   • Organizations      : ${BLUE}${KEYCLOAK_DISPLAY_URL}/admin/${REALM_NAME}/console/#/${REALM_NAME}/organizations${NC}"
+    echo -e "${GREEN}   • Clients            : ${BLUE}${KEYCLOAK_DISPLAY_URL}/admin/${REALM_NAME}/console/#/${REALM_NAME}/clients${NC}"
 fi
 echo ""
 echo -e "${GREEN}🔑 Keycloak Admin credentials:${NC}"

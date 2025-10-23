@@ -11,6 +11,17 @@ CYAN='\033[0;36m'
 WHITE='\033[0;37m'
 NC='\033[0m' # No Color
 
+# Get script directory for relative imports
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source network detection utility
+if [ -f "${SCRIPT_DIR}/../network_detect.sh" ]; then
+    source "${SCRIPT_DIR}/../network_detect.sh"
+else
+    echo -e "${RED}❌ Network detection utility not found${NC}"
+    exit 1
+fi
+
 # Keycloak LDAP Configuration Script
 # This script configures an LDAP user federation provider in Keycloak
 
@@ -25,7 +36,8 @@ REALM="$1"
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
-KEYCLOAK_URL="http://localhost:8090"
+KEYCLOAK_URL="$(get_keycloak_url)"
+LDAP_URL="$(get_ldap_url)"
 
 echo -e "${GREEN}🔧 Configuring ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} Provider for realm: ${REALM}${NC}"
 
@@ -136,7 +148,7 @@ create_ldap_provider() {
         "rdnLDAPAttribute": ["uid"],
         "uuidLDAPAttribute": ["entryUUID"],
         "userObjectClasses": ["inetOrgPerson"],
-        "connectionUrl": ["ldap://ldap:389"],
+        "connectionUrl": ["${LDAP_URL}"],
         "usersDn": ["ou=users,dc=min,dc=io"],
         "authType": ["simple"],
         "bindDn": ["cn=admin,dc=min,dc=io"],
@@ -284,7 +296,7 @@ echo -e "${YELLOW}📋 Configuration Summary:${NC}"
 echo -e "   • Realm: ${REALM}"
 echo -e "   • ${CYAN}LDAP${NC} Provider     : ldap-provider-${REALM} (ID: ${LDAP_ID})"
 echo -e "   • ${CYAN}LDAP${NC} Provider url : ${BLUE}${KEYCLOAK_URL}/admin/master/console/#/mirai/user-federation/ldap/${LDAP_ID}${NC}"
-echo -e "   • ${CYAN}LDAP${NC} Server       : ${CYAN}ldap://ldap:389${NC}"
+echo -e "   • ${CYAN}LDAP${NC} Server       : ${CYAN}${LDAP_URL}${NC}"
 echo -e "   • Users DN       : ou=users,dc=min,dc=io"
 echo -e "   • Groups DN      : ou=groups,dc=min,dc=io"
 echo -e "   • Groups Filter  : Syncing groups: admins, developers, and any groups starting with 'acme' or 'xyz'"

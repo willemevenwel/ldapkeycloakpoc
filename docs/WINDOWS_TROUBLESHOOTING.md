@@ -58,7 +58,7 @@ This prevents Git Bash from translating the path while keeping the correct path 
 # The test will specifically verify that the //tmp/ path fix is working correctly
 
 # If setup is still failing, try regenerating and reloading data
-docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv
 ./ldap/setup_ldap_data.sh
 ```
 
@@ -361,7 +361,7 @@ docker-compose up -d
 sleep 30
 
 # Regenerate LDIF files (Windows path-safe)
-docker exec python-bastion python python/csv_to_ldif.py
+docker exec python-bastion python python-bastion/csv_to_ldif.py
 
 # Check if LDIF files exist and have content
 docker exec python-bastion ls -la ldif/
@@ -399,7 +399,7 @@ cd keycloak
 ./test_all.sh your-realm-name --debug
 
 # 2. If no users/groups found, reimport data
-docker exec python-bastion python python/csv_to_ldif.py
+docker exec python-bastion python python-bastion/csv_to_ldif.py
 ./ldap/setup_ldap_data.sh
 
 # 3. Load additional users if needed

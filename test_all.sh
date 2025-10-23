@@ -26,6 +26,8 @@ while [[ $# -gt 0 ]]; do
         *)
             if [ -z "$REALM_NAME" ]; then
                 REALM_NAME="$1"
+                # Normalize realm name to lowercase for consistency
+                REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
             fi
             shift
             ;;
@@ -948,6 +950,6 @@ if [ "$DEBUG_MODE" = true ]; then
     echo -e "${CYAN}🔧 Quick troubleshooting commands:${NC}"
     echo -e "${CYAN}   • Restart LDAP: docker restart ldap${NC}"
     echo -e "${CYAN}   • Check logs: docker logs ldap${NC}"
-    echo -e "${CYAN}   • Regenerate LDIF: docker exec python-bastion python python/csv_to_ldif.py data/admins.csv${NC}"
+    echo -e "${CYAN}   • Regenerate LDIF: docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv${NC}"
     echo -e "${CYAN}   • Full restart: docker-compose down && docker-compose up -d${NC}"
 fi

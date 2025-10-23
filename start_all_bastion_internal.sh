@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script runs INSIDE the python-bastion container
+# It performs all the setup operations from within a controlled Linux environment
+# eliminating host platform issues with Windows/WSL/Git Bash
 
 # Colors for output
 RED='\033[0;31m'
@@ -10,8 +13,11 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Save the starting directory
-START_DIR="$(pwd)"
+# Working directory is /workspace (mounted from host)
+cd /workspace
+
+# Source network detection utilities
+source ./network_detect.sh
 
 # Check if realm name parameter is provided
 CHECK_STEPS=false
@@ -30,8 +36,10 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            echo -e "${GREEN}LDAP-Keycloak POC Setup Script${NC}"
+            echo -e "${GREEN}LDAP-Keycloak POC Setup Script (Container-based)${NC}"
             echo -e "${YELLOW}Usage: $0 [realm-name] [options]${NC}"
+            echo ""
+            echo -e "${CYAN}This script runs inside the python-bastion container for cross-platform compatibility${NC}"
             echo ""
             echo -e "${CYAN}Options:${NC}"
             echo -e "  --defaults         Use default values for all prompts (fully automated)"
@@ -55,6 +63,8 @@ while [[ $# -gt 0 ]]; do
         *)
             if [ -z "$REALM_NAME" ]; then
                 REALM_NAME="$1"
+                # Normalize realm name to lowercase for consistency
+                REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
             fi
             shift
             ;;
@@ -73,7 +83,7 @@ if [ -z "$REALM_NAME" ]; then
             exit 1
         fi
     elif [ "$USE_DEFAULTS" = true ]; then
-        REALM_NAME="myrealm"
+        REALM_NAME="capgemini"
         echo -e "${CYAN}Using default realm name: ${REALM_NAME}${NC}"
     else
         echo -e "${YELLOW}⚠️  No realm name provided${NC}"
@@ -84,9 +94,13 @@ if [ -z "$REALM_NAME" ]; then
             echo -e "${RED}❌ No realm name provided. Exiting.${NC}"
             exit 1
         fi
+        
+        # Normalize realm name to lowercase for consistency
+        REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
     fi
 fi
 
+echo -e "${GREEN}🐳 Running from python-bastion container - eliminating host platform issues${NC}"
 echo -e "${GREEN}🚀 Starting complete LDAP-Keycloak setup for realm: ${MAGENTA}${REALM_NAME}${NC}"
 if [ "$CHECK_STEPS" = true ]; then
     echo -e "${CYAN}🔍 Check steps mode enabled - you will be prompted for all confirmations and inputs${NC}"
@@ -96,8 +110,9 @@ if [ "$CHECK_STEPS" = true ]; then
 elif [ "$USE_DEFAULTS" = true ]; then
     echo -e "${CYAN}🎯 Defaults mode enabled - using default values for all prompts${NC}"
 fi
+
 echo -e "${YELLOW}📋 This will execute the following steps:${NC}"
-echo -e "${YELLOW}   1. Start all services (Docker containers + Mock OAuth2)${NC}"
+echo -e "${YELLOW}   1. Verify services are running (containers already started from host)${NC}"
 echo -e "${YELLOW}   1.5. Generate and load initial LDAP data${NC}"
 echo -e "${YELLOW}   2. Complete Keycloak setup (realm, LDAP integration, organizations)${NC}"
 echo -e "${YELLOW}   3. Optional: Load additional users and sync with Keycloak${NC}"
@@ -131,48 +146,74 @@ confirm_step() {
     fi
 }
 
-# Step 1: Start all services
-confirm_step "About to start all Docker services (Keycloak, LDAP, LDAP-User-Manager)"
-echo -e "${GREEN}🔄 Step 1: Starting all services...${NC}"
-./start.sh
-check_success
-echo -e "${GREEN}✅ Services started successfully${NC}"
-echo -e "${YELLOW}⏳ Waiting for services to fully initialize...${NC}"
+# Verify required tools are available (pre-installed in container image)
+echo -e "${CYAN}� Verifying container tools...${NC}"
+MISSING_TOOLS=""
 
-# Cross-platform robust service readiness check
-echo -e "${CYAN}Checking service readiness...${NC}"
-sleep 5
+if ! command -v docker &> /dev/null; then
+    MISSING_TOOLS="$MISSING_TOOLS docker"
+fi
 
-# Check if containers are actually running
+if ! command -v curl &> /dev/null; then
+    MISSING_TOOLS="$MISSING_TOOLS curl"
+fi
+
+if ! command -v jq &> /dev/null; then
+    MISSING_TOOLS="$MISSING_TOOLS jq"
+fi
+
+if ! command -v ldapsearch &> /dev/null; then
+    MISSING_TOOLS="$MISSING_TOOLS ldap-utils"
+fi
+
+if [ -n "$MISSING_TOOLS" ]; then
+    echo -e "${RED}❌ Missing required tools: $MISSING_TOOLS${NC}"
+    echo -e "${YELLOW}💡 Please rebuild the python-bastion container with: docker-compose build utils${NC}"
+    exit 1
+else
+    echo -e "${GREEN}✅ All required tools available: docker, curl, jq, ldap-utils${NC}"
+fi
+
+# Show environment detection
+show_environment_info
+
+# Step 1: Verify services are running (they should be started from host)
+confirm_step "About to verify that all Docker services are running"
+echo -e "${GREEN}🔄 Step 1: Verifying all services are running...${NC}"
+
+# Check if containers are actually running using Docker API from within container
 containers_running=0
-expected_containers=("ldap" "keycloak" "python-bastion")
+expected_containers=("ldap" "keycloak" "python-bastion" "ldap-manager")
 for container in "${expected_containers[@]}"; do
     if docker ps --format "table {{.Names}}" | grep -q "^${container}$"; then
         echo -e "${GREEN}✓${NC} ${container} container is running"
         containers_running=$((containers_running + 1))
     else
-        echo -e "${RED}✗${NC} ${container} container is not running"
+        echo -e "${YELLOW}⚠️${NC} ${container} container is not running"
         echo -e "${YELLOW}  Checking container status...${NC}"
         docker ps -a --filter "name=${container}" --format "table {{.Names}}\t{{.Status}}"
     fi
 done
 
 if [ $containers_running -ne ${#expected_containers[@]} ]; then
-    echo -e "${RED}❌ Not all containers are running. Please check 'docker ps'${NC}"
+    echo -e "${RED}❌ Not all expected containers are running.${NC}"
     echo -e "${YELLOW}Expected: ${expected_containers[*]}${NC}"
+    echo -e "${YELLOW}This script should be run after starting containers from host.${NC}"
+    echo -e "${YELLOW}Make sure to run 'docker-compose up -d' from host first.${NC}"
     exit 1
 fi
 
-# Enhanced startup time for cross-platform compatibility
-echo -e "${YELLOW}⏳ Allowing startup time for services to initialize...${NC}"
-echo -e "${CYAN}This ensures compatibility across macOS, Windows, and slower systems${NC}"
+echo -e "${GREEN}✅ All expected services are running${NC}"
+
+# Enhanced service readiness check
+echo -e "${YELLOW}⏳ Checking service readiness...${NC}"
 
 # Progressive wait with service checks
 for i in {1..6}; do
-    echo -e "${CYAN}Startup check $i/6...${NC}"
+    echo -e "${CYAN}Service readiness check $i/6...${NC}"
     sleep 5
     
-    # Check if LDAP is responding (basic connectivity test)
+    # Check if LDAP is responding (using docker exec from within the container)
     if docker exec ldap ldapsearch -x -H ldap://localhost:389 -b "" -s base >/dev/null 2>&1; then
         echo -e "${GREEN}✓ LDAP service is responding${NC}"
         break
@@ -187,13 +228,40 @@ for i in {1..6}; do
     fi
 done
 
+# Check Keycloak readiness
+echo -e "${CYAN}🔍 Checking Keycloak readiness...${NC}"
+for i in {1..20}; do
+    # Try to access Keycloak from within the network (more reliable than health endpoint)
+    if curl -s -f http://keycloak:8080/realms/master >/dev/null 2>&1 || \
+       curl -s -f http://keycloak:8080/auth/realms/master >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Keycloak service is responding${NC}"
+        break
+    else
+        echo -e "${YELLOW}⏳ Keycloak service still initializing... ($i/20)${NC}"
+        if [ $i -eq 20 ]; then
+            echo -e "${YELLOW}⚠️  Keycloak health check timeout, but let's check if it's actually accessible${NC}"
+            # Final check - if we can get a response, proceed anyway
+            if curl -s http://keycloak:8080/realms/master | grep -q "master" 2>/dev/null; then
+                echo -e "${GREEN}✓ Keycloak is actually accessible, proceeding${NC}"
+                break
+            else
+                echo -e "${RED}❌ Keycloak service failed to initialize within expected time${NC}"
+                echo -e "${YELLOW}Container logs (last 20 lines):${NC}"
+                docker logs keycloak --tail 20
+                exit 1
+            fi
+        fi
+        sleep 10
+    fi
+done
+
 # Step 1.5: Generate LDIF files and load initial data
 confirm_step "About to generate LDIF files from CSV data and load them into LDAP"
 echo -e "${GREEN}🔄 Step 1.5: Generating LDIF files and loading initial data...${NC}"
-echo -e "${CYAN}📝 Generating LDIF from CSV files using containerized Python...${NC}"
+echo -e "${CYAN}📝 Generating LDIF from CSV files using Python (already inside container)...${NC}"
 
-# Generate LDIF files
-if docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv; then
+# Generate LDIF files using the local Python environment
+if python python-bastion/csv_to_ldif.py data/admins.csv; then
     echo -e "${GREEN}✓ LDIF generation completed${NC}"
 else
     echo -e "${RED}❌ LDIF generation failed${NC}"
@@ -253,7 +321,7 @@ else
     org_prefixes="acme xyz"
 fi
 
-cd "$START_DIR"
+cd /workspace
 echo -e "${GREEN}✅ Complete Keycloak setup finished successfully${NC}"
 echo ""
 
@@ -304,15 +372,9 @@ fi
 
 echo -e "${YELLOW}💡 Expected users synced: admin, alice, bob, charlie, willem, jp, louis, razvan, jack, andre, anwar${NC}"
 echo ""
-echo -e "${CYAN}🔄 To sync again later, run: ${WHITE}cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
+echo -e "${CYAN}🔄 To sync again later, run from host: ${WHITE}./start_all_bastion.sh ${REALM_NAME} --sync-only${NC}"
 echo ""
-echo -e "${YELLOW}📖 Usage examples:${NC}"
-echo -e "${YELLOW}   ./start_all.sh my-realm${NC}                    # Full automated setup"
-echo -e "${YELLOW}   ./start_all.sh my-realm --defaults${NC}         # Fully automated with all defaults"
-echo -e "${YELLOW}   ./start_all.sh my-realm --check-steps${NC}      # Interactive mode with confirmations"
-echo -e "${YELLOW}   ./start_all.sh --defaults${NC}                  # Use defaults for realm name and all prompts"
-echo -e "${YELLOW}   ./start_all.sh --check-steps${NC}               # Interactive mode, will prompt for realm name"
-echo ""
+
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${CYAN}🏢 Organization Features Available:${NC}"
     echo -e "${CYAN}   • JWT tokens contain organization-specific role claims${NC}"
@@ -328,7 +390,7 @@ fi
 # Step 3: Optional - Load additional users
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}� Step 3: Optional - Load additional users and group assignments into LDAP${NC}"
+echo -e "${YELLOW}🔧 Step 3: Optional - Load additional users and group assignments into LDAP${NC}"
 echo -e "${YELLOW}   This will import additional data from users.ldif and group_assign.ldif${NC}"
 echo -e "${YELLOW}   Run this if you want to add more test users beyond the basic setup${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -345,23 +407,26 @@ else
 fi
 if [ "${run_additional}" = "Y" ] || [ "${run_additional}" = "y" ]; then
     if [ "$USE_DEFAULTS" = true ]; then
-        "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}" --defaults
+        /workspace/ldap/load_additional_users.sh "${REALM_NAME}" --defaults
     else
-        "$START_DIR"/ldap/load_additional_users.sh "${REALM_NAME}"
+        /workspace/ldap/load_additional_users.sh "${REALM_NAME}"
     fi
     echo ""
     echo -e "${GREEN}✅ Additional users loaded. You may want to re-sync LDAP:${NC}"
-    echo -e "${GREEN}   cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
+    echo -e "${GREEN}   From host: ./start_all_bastion.sh ${REALM_NAME} --sync-only${NC}"
 else
     echo -e "${YELLOW}Skipped additional users import. You can run it manually later with:${NC}"
-    echo -e "${YELLOW}   ./ldap/load_additional_users.sh${NC}"
-    echo -e "${YELLOW}   Then re-sync with: cd keycloak && ./sync_ldap.sh ${REALM_NAME}${NC}"
+    echo -e "${YELLOW}   From host: ./start_all_bastion.sh ${REALM_NAME} --load-users${NC}"
+    echo -e "${YELLOW}   Then re-sync with: ./start_all_bastion.sh ${REALM_NAME} --sync-only${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}🎉 SETUP COMPLETE! Your LDAP-Keycloak POC is ready!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "${CYAN}🐳 Setup completed from within python-bastion container${NC}"
+echo -e "${CYAN}   This eliminates host platform issues with Windows/WSL/Git Bash${NC}"
 echo ""
 echo -e "${WHITE}🚀 ${GREEN}START HERE:${NC} ${BLUE}http://localhost:8888${NC}"
 echo -e "${YELLOW}   └─ Complete dashboard with all services, links, and credentials${NC}"
@@ -373,4 +438,3 @@ echo -e "${CYAN}   • Weave Scope Network Visualization${NC}"
 echo -e "${CYAN}   • All login credentials with security warnings${NC}"
 echo ""
 echo -e "${GREEN}Happy testing with your LDAP-Keycloak integration! 🔐✨${NC}"
-

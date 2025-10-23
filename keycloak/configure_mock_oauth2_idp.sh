@@ -34,10 +34,21 @@ else
     echo -e "${BLUE}📋 Using provided organization prefixes: ${ORGANIZATION_PREFIXES[*]}${NC}"
 fi
 
+# Get script directory for relative imports
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source network detection utility
+if [ -f "${SCRIPT_DIR}/../network_detect.sh" ]; then
+    source "${SCRIPT_DIR}/../network_detect.sh"
+else
+    echo -e "${RED}❌ Network detection utility not found${NC}"
+    exit 1
+fi
+
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"
-KEYCLOAK_URL="http://localhost:8090"
-MOCK_OAUTH2_URL="http://localhost:8081"
+KEYCLOAK_URL="$(get_keycloak_url)"
+MOCK_OAUTH2_URL="http://localhost:8081"  # OAuth2 mock doesn't need container resolution
 
 echo -e "${GREEN}🔧 Configuring Mock OAuth2 Server as Identity Provider for realm: ${REALM}${NC}"
 
@@ -212,7 +223,7 @@ create_org_oauth2_clients() {
     "clientId": "${org_prefix}-${REALM}-client",
     "clientSecret": "${org_prefix}-secret-${REALM}",
     "redirectUris": [
-        "http://localhost:8090/realms/${REALM}/broker/mock-oauth2/endpoint",
+        "${KEYCLOAK_URL}/realms/${REALM}/broker/mock-oauth2/endpoint",
         "http://${org_prefix}.${REALM}.local/*",
         "http://localhost:3000/${org_prefix}/*"
     ],
@@ -431,7 +442,7 @@ echo -e "${GREEN}   • Mock OAuth2 URL: ${MOCK_OAUTH2_URL}${NC}"
 
 echo ""
 echo -e "${GREEN}🌐 Access URLs:${NC}"
-echo -e "${GREEN}   • Keycloak Identity Providers: ${BLUE}http://localhost:8090/admin/${REALM}/console/#/${REALM}/identity-providers${NC}"
+echo -e "${GREEN}   • Keycloak Identity Providers: ${BLUE}${KEYCLOAK_URL}/admin/${REALM}/console/#/${REALM}/identity-providers${NC}"
 echo -e "${GREEN}   • Mock OAuth2 Server: ${BLUE}${MOCK_OAUTH2_URL}${NC}"
 echo -e "${GREEN}   • OIDC Configuration: ${BLUE}${MOCK_OAUTH2_URL}/default/.well-known/openid_configuration${NC}"
 
