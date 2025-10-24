@@ -75,9 +75,9 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 - [User and Group Management](#user-and-group-management)
 - [Web UI Management](#web-ui-management)
 - [Keycloak Script Reference](#keycloak-script-reference)
+- [Testing and Verification](#testing-and-verification) 🧪
 - [Debugging and Troubleshooting](#debugging-and-troubleshooting)
 - [Script Reference & Migration](#script-reference--migration)
-- [Testing and Verification](#testing-and-verification)
 - [LDAP Group Types and Compatibility](#ldap-group-types-and-compatibility)
 - [CSV File Structure and Influence](#csv-file-structure-and-influence)
 - [Development Notes](#development-notes)
@@ -177,9 +177,25 @@ Host System (Windows/macOS/Linux)
 │   ├── Starts Docker services
 │   ├── Waits for container readiness  
 │   └── Executes → start_all_bastion_internal.sh (inside container)
+├── test_all.sh                 # 🧪 TEST: Host wrapper script
+│   └── Executes → test_all_internal.sh (inside container)
+├── test_jwt.sh                 # 🧪 JWT: Host wrapper script  
+│   └── Executes → test_jwt_internal.sh (inside container)
 ├── start_all.sh                # ⚠️ LEGACY: Traditional host-based (Windows issues)
 └── network_detect.sh           # Network detection utility
+
+Container (python-bastion):
+├── start_all_bastion_internal.sh    # 🚀 Complete setup orchestrator
+├── test_all_internal.sh             # 🧪 Comprehensive testing suite
+├── test_jwt_internal.sh              # 🧪 JWT token validation
+└── keycloak/keycloak_setup_full.sh   # 🔧 Keycloak configuration master
 ```
+
+**Wrapper Script Pattern:**
+1. **Detection**: Script detects if running on host or inside container
+2. **Container Check**: Verifies python-bastion container is running
+3. **Execution**: If on host → execute internal version inside container
+4. **Passthrough**: If already in container → execute directly
 
 ### Benefits of Container-Based Approach
 
@@ -1173,14 +1189,18 @@ By removing the `.git` directory, the code becomes part of your main repository 
 - `start_all_bastion.sh` - Complete LDAP-Keycloak setup (cross-platform)
 - `start.sh` - LDAP-only setup
 - `stop.sh` - Stop all services
-- `test_all.sh` - Testing and verification
-- `test_jwt.sh` - JWT token validation
 
-**⚠️ LEGACY: Traditional Scripts**
+**🧪 TESTING: Container-Based Test Scripts**
+- `test_all.sh` - Comprehensive system testing and verification (cross-platform)  
+- `test_jwt.sh` - JWT token validation with organization users (cross-platform)
+
+**⚠️ LEGACY: Traditional Scripts**  
 - `start_all.sh` - Traditional setup (Windows compatibility issues)
 
 **🔧 INTERNAL: Container-Only Scripts**
-- `start_all_bastion_internal.sh` - Internal script (runs inside container - users never call directly)
+- `start_all_bastion_internal.sh` - Internal setup script (runs inside container - users never call directly)
+- `test_all_internal.sh` - Internal test script (runs inside container - users never call directly)
+- `test_jwt_internal.sh` - Internal JWT test script (runs inside container - users never call directly)
 - `network_detect.sh` - Network detection utility (sourced by other scripts)
 
 ### Migration Guide
@@ -1206,41 +1226,205 @@ The following auxiliary markdown files have been **consolidated into this README
 
 ## Testing and Verification
 
-### JWT Token Verification
+### Container-Based Test Architecture 🐳
 
-The `test_jwt.sh` script validates JWT tokens and role assignments:
+Both test scripts use a **container wrapper architecture** for cross-platform compatibility:
+
+- **Host Scripts**: `test_all.sh` and `test_jwt.sh` (what users run)
+- **Internal Scripts**: `test_all_internal.sh` and `test_jwt_internal.sh` (run inside container)
+- **Benefits**: Eliminates Windows/Git Bash jq dependency issues, ensures consistent behavior
+
+### Comprehensive System Testing
+
+The `test_all.sh` script performs complete integration testing:
 
 ```bash
-# Test specific users with custom realm
-./test_jwt.sh capgemini test-acme-admin test-xyz-user alice
+# 🚀 RECOMMENDED: Test all components (cross-platform)
+./test_all.sh                           # Test basic services only (no realm)
+./test_all.sh capgemini                 # Test with specific realm
+./test_all.sh mycompany                 # Test with custom realm
 
-# Use defaults flag to test with organization test users
-./test_jwt.sh capgemini --defaults
-
-# Or with --defaults first for default realm (uses capgemini)
-./test_jwt.sh --defaults
-
-# Works with any realm name
-./test_jwt.sh myrealm test-acme-admin test-xyz-user
+# Example output
+🐳 Running comprehensive tests inside python-bastion container for cross-platform compatibility...
+✅ LDAP container - running
+✅ Keycloak container - running  
+✅ LDAP basic service - responding to anonymous queries
+✅ Keycloak service health - ready and accessible
+✅ Keycloak realm 'capgemini' - exists and accessible
+✅ LDAP provider configuration - properly configured
+✅ Organizations feature enabled - server and realm support confirmed
 ```
 
-**Features:**
-- 🔄 **CSV Password Support**: Automatically reads passwords from `data/users.csv`
-- 🎯 **Flexible Users**: Test any combination of users (CSV or non-CSV)
-- 🏢 **Realm Agnostic**: Works with any Keycloak realm name
-- 🔍 **JWT Decoding**: Base64 decodes and displays token contents
-- ✅ **Role Validation**: Shows assigned roles for each user
+**Test Coverage:**
+- 🐳 **Docker Container Status**: Verifies all containers are running
+- 🔗 **Service Connectivity**: Tests LDAP and Keycloak accessibility
+- 🏢 **Realm Configuration**: Validates realm exists and is configured (with lowercase normalization)
+- 👥 **LDAP Integration**: Checks LDAP provider and user federation
+- 🎯 **Organization Features**: Tests Keycloak Organizations support (v26+)
+- 🔑 **Shared Clients**: Validates organization-aware client configuration
+- 🎭 **JWT Token Generation**: Tests authentication and token creation
+- 🛡️ **Role Mapping**: Verifies LDAP groups → Keycloak roles
+- 📝 **Naming Consistency**: Ensures realms, organizations, and usernames are lowercase
 
-### Complete Integration Testing
+### JWT Token Verification
 
-Run the full test suite:
+The `test_jwt.sh` script validates JWT tokens and role assignments with **organization test users**:
 
 ```bash
-# Test all components with specific realm
-./test_all.sh capgemini
+# 🚀 RECOMMENDED: Use organization test users (guaranteed to exist)
+./test_jwt.sh --defaults                           # Uses capgemini realm + org users
+./test_jwt.sh capgemini --defaults                 # Custom realm + org users  
+./test_jwt.sh mycompany --defaults                 # Any realm + org users
 
-# Test with default realm
-./test_all.sh
+# 🔧 ADVANCED: Test specific users
+./test_jwt.sh capgemini test-acme-admin test-xyz-user test-multi-org
+./test_jwt.sh myrealm alice bob charlie            # Test CSV users
+./test_jwt.sh myrealm test-acme-admin              # Test single organization user
+```
+
+**Default Organization Test Users:**
+
+These users are **guaranteed to exist** after running organization setup and provide realistic test scenarios:
+
+| Username | Organization | Role | Purpose |
+|----------|-------------|------|---------|
+| `test-acme-admin` | ACME Corp | Administrator | Test admin permissions and ACME org access |
+| `test-xyz-user` | XYZ Inc | Standard User | Test regular user permissions and XYZ org access |
+| `test-multi-org` | Multi-Org | Cross-Org User | Test users with access to multiple organizations |
+
+**Why Organization Test Users?**
+- ✅ **Guaranteed Existence**: Created automatically during organization setup
+- ✅ **Realistic Scenarios**: Represent actual business use cases
+- ✅ **Cross-Platform**: No dependency on CSV file variations
+- ✅ **Role Testing**: Cover admin, user, and multi-org scenarios
+- ✅ **Predictable**: Same users across all environments and setups
+
+**JWT Testing Features:**
+- 🐳 **Container Execution**: Runs inside python-bastion for cross-platform compatibility
+- 🔄 **CSV Password Integration**: Automatically reads passwords from `data/users.csv`
+- 🎯 **Organization Users**: Default users guaranteed to exist after organization setup
+- 🏢 **Realm Flexibility**: Works with any Keycloak realm name
+- 🔍 **JWT Decoding**: Base64 decodes and displays token contents with jq formatting
+- ✅ **Role Validation**: Shows assigned roles and organization memberships
+- 🌐 **Cross-Platform**: No jq dependency issues on Windows/Git Bash
+
+**Example JWT Test Output:**
+```bash
+🐳 Running JWT tests inside python-bastion container for cross-platform compatibility...
+=========================================
+JWT ROLE VERIFICATION  
+=========================================
+🎯 Using defaults: realm=capgemini, users=[test-acme-admin test-xyz-user test-multi-org]
+🔑 Getting current client secret...
+✅ Retrieved client secret for shared-web-client
+
+👤 Testing user: test-acme-admin
+🔐 Authenticating test-acme-admin...
+✅ Authentication successful
+🎫 JWT Token obtained and validated
+📋 Decoded JWT payload:
+{
+  "sub": "12345678-1234-1234-1234-123456789012",
+  "realm_roles": ["admin", "acme-admin"],
+  "organization": "acme",
+  "preferred_username": "test-acme-admin",
+  "email": "test-acme-admin@acme.capgemini.local"
+}
+```
+
+### Cross-Platform Testing Benefits
+
+**Before (Host-Based Testing):**
+- ❌ Windows/Git Bash: jq command not found
+- ❌ Path translation issues on Windows
+- ❌ Inconsistent behavior across platforms
+- ❌ Requires manual tool installation
+
+**After (Container-Based Testing):**
+- ✅ **Universal Compatibility**: Works on Windows, macOS, Linux
+- ✅ **No Tool Dependencies**: jq, curl pre-installed in container
+- ✅ **Consistent Results**: Identical behavior across platforms
+- ✅ **Clean Output**: Professional, streamlined user experience
+- ✅ **Automatic Detection**: Host vs container execution
+
+### Quick Testing Reference
+
+**🚀 Most Common Test Commands:**
+```bash
+# Complete system test (recommended first step)
+./test_all.sh mycompany
+
+# JWT test with organization users (most reliable)
+./test_jwt.sh --defaults
+
+# JWT test with specific realm and organization users
+./test_jwt.sh mycompany --defaults
+
+# Debug specific user authentication
+./test_jwt.sh mycompany test-acme-admin
+```
+
+**🔧 Advanced Testing Commands:**
+```bash
+# Test multiple specific users  
+./test_jwt.sh mycompany test-acme-admin test-xyz-user test-multi-org
+
+# Test CSV users (requires users exist in data/users.csv)
+./test_jwt.sh mycompany alice bob charlie
+
+# Test single CSV user with password lookup
+./test_jwt.sh mycompany alice
+```
+
+### Testing Workflow Integration
+
+**Complete Development Cycle:**
+```bash
+# 1. Start services with complete setup
+./start_all_bastion.sh mycompany --defaults
+
+# 2. Run comprehensive tests
+./test_all.sh mycompany
+
+# 3. Test JWT functionality with organization users  
+./test_jwt.sh --defaults
+
+# 4. Make changes to configuration...
+
+# 5. Re-test specific components
+./test_jwt.sh mycompany test-acme-admin    # Test single user
+```
+
+### Troubleshooting Test Failures
+
+**Container Not Running:**
+```bash
+❌ python-bastion container not running. Please start services first:
+   ./start_all_bastion.sh
+
+# Solution: Start services first
+./start_all_bastion.sh mycompany --defaults
+```
+
+**Authentication Failures:**
+```bash
+❌ Failed to get admin token. Is Keycloak running with capgemini realm?
+
+# Debug steps:
+1. Check container status: docker ps
+2. Check Keycloak logs: docker logs keycloak  
+3. Verify realm exists: ./test_all.sh capgemini
+4. Check LDAP integration: ./keycloak/debug_realm_ldap.sh capgemini
+```
+
+**Organization User Issues:**
+```bash
+❌ User test-acme-admin authentication failed
+
+# Solutions:
+1. Ensure organization setup completed: ./test_all.sh capgemini
+2. Check LDAP users exist: ldapsearch -x -H ldap://localhost:389 -b "ou=users,dc=mycompany,dc=local"
+3. Verify LDAP sync: ./keycloak/sync_ldap.sh capgemini
 ```
 
 ## License

@@ -1,28 +1,8 @@
 #!/bin/bash
 
-# JWT Role Verification Script for LDAP-Keycloak POC
+# JWT Role Verification Script for LDAP-Keycloak POC (Internal - runs inside python-bastion container)
 # 
-# This script runs inside the python-bastion container where all tools (jq, curl, etc.) are available
-# This eliminates cross-platform compatibility issues with Windows/Git Bash
-
-# Check if we're running inside the container or from host
-if [ -f /.dockerenv ] || [ "$CONTAINER_RUNTIME" = "true" ]; then
-    # We're inside the container - run the internal version
-    exec ./test_jwt_internal.sh "$@"
-else
-    # We're on the host - execute inside python-bastion container
-    echo "🐳 Running JWT tests inside python-bastion container for cross-platform compatibility..."
-    
-    # Check if python-bastion container is running
-    if ! docker ps --format "table {{.Names}}" | grep -q "python-bastion"; then
-        echo "❌ python-bastion container not running. Please start services first:"
-        echo "   ./start_all_bastion.sh"
-        exit 1
-    fi
-    
-    # Execute the internal script inside the container
-    docker exec -it python-bastion bash -c "cd /workspace && ./test_jwt_internal.sh $*"
-fi
+# This script runs inside the python-bastion container where jq, curl, and all tools are available
 # 
 # This script tests JWT tokens and role assignments for users in a Keycloak realm
 # that is integrated with LDAP user federation.
@@ -71,7 +51,7 @@ try_authenticate() {
         local csv_password=$(grep "^${username}," data/users.csv | cut -d',' -f5 | tr -d '"' | tr -d ' ')
         if [ -n "$csv_password" ] && [ "$csv_password" != "$username" ]; then
             echo -e "🔍 Trying CSV password for $username ($csv_password)" >&2
-            local token_response=$(curl -s -X POST "http://localhost:8090/realms/${realm}/protocol/openid-connect/token" \
+            local token_response=$(curl -s -X POST "http://keycloak:8080/realms/${realm}/protocol/openid-connect/token" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
                 -d "grant_type=password" \
                 -d "client_id=shared-web-client" \
@@ -79,13 +59,7 @@ try_authenticate() {
                 -d "username=${username}" \
                 -d "password=${csv_password}")
             
-            # Check if response contains access_token (compatible with Windows/Git Bash)
-            PYTHON_CMD=$(get_python_cmd)
-            if [ "$PYTHON_CMD" != "none" ] && echo "$token_response" | $PYTHON_CMD -c "import sys, json; data = json.load(sys.stdin); exit(0 if 'access_token' in data else 1)" 2>/dev/null; then
-                echo "$token_response"
-                return 0
-            elif echo "$token_response" | grep -q '"access_token"'; then
-                # Fallback if Python fails
+            if echo "$token_response" | jq -e '.access_token' > /dev/null 2>&1; then
                 echo "$token_response"
                 return 0
             fi
@@ -94,7 +68,7 @@ try_authenticate() {
     
     # Fallback to username as password
     echo -e "🔍 Trying username password for $username ($username)" >&2
-    local token_response=$(curl -s -X POST "http://localhost:8090/realms/${realm}/protocol/openid-connect/token" \
+    local token_response=$(curl -s -X POST "http://keycloak:8080/realms/${realm}/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=password" \
         -d "client_id=shared-web-client" \
@@ -154,7 +128,7 @@ fi
 echo "🔑 Getting current client secret..."
 
 # Get admin token for the specified realm
-ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
+ADMIN_TOKEN=$(curl -s -X POST "http://keycloak:8080/realms/${REALM_NAME}/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin-${REALM_NAME}" \
   -d "password=admin-${REALM_NAME}" \
@@ -167,7 +141,7 @@ if [ -z "$ADMIN_TOKEN" ]; then
 fi
 
 # Get shared-web-client UUID
-CLIENT_UUID=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
+CLIENT_UUID=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [ -z "$CLIENT_UUID" ]; then
@@ -176,7 +150,7 @@ if [ -z "$CLIENT_UUID" ]; then
 fi
 
 # Get client secret
-CLIENT_SECRET=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients/${CLIENT_UUID}/client-secret" \
+CLIENT_SECRET=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients/${CLIENT_UUID}/client-secret" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$CLIENT_SECRET" ]; then
@@ -215,13 +189,7 @@ for USERNAME in "${USERS[@]}"; do
     # Try authentication with both CSV and fallback passwords
     TOKEN_RESPONSE=$(try_authenticate "$USERNAME" "$REALM_NAME" "$CLIENT_SECRET")
     
-    # Extract access token (compatible with Windows/Git Bash)
-    PYTHON_CMD=$(get_python_cmd)
-    if [ "$PYTHON_CMD" != "none" ]; then
-        ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | $PYTHON_CMD -c "import sys, json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null)
-    else
-        ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
-    fi
+    ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token' 2>/dev/null)
 
     if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
         echo "❌ Failed to get access token for ${USERNAME}"
@@ -249,76 +217,19 @@ for USERNAME in "${USERS[@]}"; do
 
     echo ""
     echo "realm_access.roles (first 5):"
-    # Extract realm roles (compatible with Windows/Git Bash)
-    PYTHON_CMD=$(get_python_cmd)
-    if [ "$PYTHON_CMD" != "none" ]; then
-        $PYTHON_CMD -c "
-import sys, json
-try:
-    with open('$TOKEN_FILE', 'r') as f:
-        data = json.load(f)
-    for role in data.get('realm_access', {}).get('roles', [])[:5]:
-        print('  ' + role)
-except:
-    print('  (Unable to parse roles)')
-" 2>/dev/null
-    else
-        echo "  (Python not available)"
-    fi
+    jq -r '.realm_access.roles[]' "$TOKEN_FILE" 2>/dev/null | head -5 | sed 's/^/  /'
 
     echo ""
     echo "acme_enabled:"
-    # Extract acme_enabled flag (compatible with Windows/Git Bash)
-    PYTHON_CMD=$(get_python_cmd)
-    if [ "$PYTHON_CMD" != "none" ]; then
-        $PYTHON_CMD -c "
-import sys, json
-try:
-    with open('$TOKEN_FILE', 'r') as f:
-        data = json.load(f)
-    print('  ' + str(data.get('acme_enabled', 'null')))
-except:
-    print('  (Unable to parse)')
-" 2>/dev/null
-    else
-        echo "  (Python not available)"
-    fi
+    jq -r '.acme_enabled' "$TOKEN_FILE" 2>/dev/null | sed 's/^/  /'
 
     echo ""
     echo "xyz_enabled:"
-    # Extract xyz_enabled flag (compatible with Windows/Git Bash)
-    PYTHON_CMD=$(get_python_cmd)
-    if [ "$PYTHON_CMD" != "none" ]; then
-        $PYTHON_CMD -c "
-import sys, json
-try:
-    with open('$TOKEN_FILE', 'r') as f:
-        data = json.load(f)
-    print('  ' + str(data.get('xyz_enabled', 'null')))
-except:
-    print('  (Unable to parse)')
-" 2>/dev/null
-    else
-        echo "  (Python not available)"
-    fi
+    jq -r '.xyz_enabled' "$TOKEN_FILE" 2>/dev/null | sed 's/^/  /'
 
     echo ""
     echo "organization_enabled:"
-    # Extract organization_enabled flag (compatible with Windows/Git Bash)
-    PYTHON_CMD=$(get_python_cmd)
-    if [ "$PYTHON_CMD" != "none" ]; then
-        $PYTHON_CMD -c "
-import sys, json
-try:
-    with open('$TOKEN_FILE', 'r') as f:
-        data = json.load(f)
-    print('  ' + str(data.get('organization_enabled', 'null')))
-except:
-    print('  (Unable to parse)')
-" 2>/dev/null
-    else
-        echo "  (Python not available)"
-    fi
+    jq -r '.organization_enabled' "$TOKEN_FILE" 2>/dev/null | sed 's/^/  /'
 
     echo ""
 done
