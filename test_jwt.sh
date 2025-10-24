@@ -43,6 +43,17 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Function to get Python command (compatible with different environments)
+get_python_cmd() {
+    if command -v python3 >/dev/null 2>&1; then
+        echo "python3"
+    elif command -v python >/dev/null 2>&1; then
+        echo "python"
+    else
+        echo "none"
+    fi
+}
+
 # Function to get user password - tries CSV first, then username fallback
 get_user_password() {
     local username=$1
