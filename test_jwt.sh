@@ -91,12 +91,7 @@ try_authenticate() {
                 -d "password=${csv_password}")
             
             # Check if response contains access_token (compatible with Windows/Git Bash)
-            PYTHON_CMD=$(get_python_cmd)
-            if [ "$PYTHON_CMD" != "none" ] && echo "$token_response" | $PYTHON_CMD -c "import sys, json; data = json.load(sys.stdin); exit(0 if 'access_token' in data else 1)" 2>/dev/null; then
-                echo "$token_response"
-                return 0
-            elif echo "$token_response" | grep -q '"access_token"'; then
-                # Fallback if Python fails
+            if echo "$token_response" | grep -q '"access_token"'; then
                 echo "$token_response"
                 return 0
             fi
@@ -229,14 +224,25 @@ for USERNAME in "${USERS[@]}"; do
     # Extract access token (compatible with Windows/Git Bash)
     PYTHON_CMD=$(get_python_cmd)
     if [ "$PYTHON_CMD" != "none" ]; then
-        ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | $PYTHON_CMD -c "import sys, json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null)
+        ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | $PYTHON_CMD -c "import sys, json; data = json.load(sys.stdin); print(data['access_token'])" 2>/dev/null)
     else
         ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
     fi
 
+    # Additional fallback for Windows - try grep if other methods fail
+    if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+        ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+    fi
+
     if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-        echo "❌ Failed to get access token for ${USERNAME}"
-        echo "🔍 Error response: $TOKEN_RESPONSE"
+        # Check if token was actually in the response
+        if echo "$TOKEN_RESPONSE" | grep -q '"access_token"'; then
+            echo "❌ Authentication succeeded but failed to extract access token for ${USERNAME}"
+            echo "🔍 This is likely a parsing issue. Token is present in response."
+        else
+            echo "❌ Authentication failed for ${USERNAME}"
+            echo "🔍 Error response: $TOKEN_RESPONSE"
+        fi
         echo ""
         continue
     fi
@@ -249,11 +255,40 @@ for USERNAME in "${USERS[@]}"; do
     done
     
     TOKEN_FILE="/tmp/${USERNAME}_token.json"
-    echo "$JWT_PAYLOAD" | base64 -d > "$TOKEN_FILE" 2>/dev/null
-    if [ $? -eq 0 ]; then
+    
+    # Try base64 decoding with different approaches for Windows compatibility
+    if echo "$JWT_PAYLOAD" | base64 -d > "$TOKEN_FILE" 2>/dev/null; then
         echo "✅ Token obtained and decoded"
+    elif echo "$JWT_PAYLOAD" | base64 --decode > "$TOKEN_FILE" 2>/dev/null; then
+        echo "✅ Token obtained and decoded (using --decode flag)"
+    elif command -v python3 >/dev/null 2>&1; then
+        # Python fallback for Windows Git Bash
+        python3 -c "
+import base64, sys
+try:
+    payload = '$JWT_PAYLOAD'
+    decoded = base64.b64decode(payload + '==')
+    with open('$TOKEN_FILE', 'wb') as f:
+        f.write(decoded)
+    print('✅ Token obtained and decoded (using Python)')
+except Exception as e:
+    sys.exit(1)
+" 2>/dev/null
+    elif command -v python >/dev/null 2>&1; then
+        # Python2 fallback
+        python -c "
+import base64
+try:
+    payload = '$JWT_PAYLOAD'
+    decoded = base64.b64decode(payload + '==')
+    with open('$TOKEN_FILE', 'w') as f:
+        f.write(decoded)
+    print('✅ Token obtained and decoded (using Python 2)')
+except:
+    exit(1)
+" 2>/dev/null
     else
-        echo "❌ Failed to decode JWT token for ${USERNAME}"
+        echo "❌ Failed to decode JWT token for ${USERNAME} - no base64 decoder available"
         echo ""
         continue
     fi
