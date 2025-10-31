@@ -2,17 +2,130 @@
 
 A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF conversion, data import, Keycloak integration, and web-based user management interface.
 
+## Quick Start
+
+### Complete LDAP-Keycloak Setup (Recommended: Container-Based)
+
+**🚀 Enhanced Container-Based Approach (All Platforms):**
+```bash
+# Complete automated setup with realm creation and LDAP integration
+./start_all_bastion.sh <realm-name>
+
+# Fully automated with all defaults
+./start_all_bastion.sh <realm-name> --defaults
+
+# Interactive mode with step-by-step confirmation
+./start_all_bastion.sh <realm-name> --check-steps
+```
+
+**Example:**
+```bash
+# Set up everything for "mycompany" realm
+./start_all_bastion.sh mycompany --defaults
+```
+
+**Benefits of Container-Based Approach:**
+- ✅ **Eliminates Windows/WSL/Git Bash compatibility issues**
+- ✅ **Clean professional output** - no messy package installation feedback
+- ✅ **Pre-installed tools** - docker, curl, jq, ldap-utils ready immediately
+- ✅ **Automatic network detection** - uses service names in containers, localhost on host
+- ✅ **Cross-platform reliability** - identical behavior on Windows/macOS/Linux
+
+### Alternative: Traditional Host-Based Setup
+
+**⚠️ Legacy approach (compatibility issues on Windows):**
+```bash
+# Traditional setup (may have Windows/path issues)
+./start_all.sh <realm-name>
+```
+
+### LDAP-Only Setup
+
+**Start LDAP services only (no Keycloak realm setup):**
+```bash
+./start.sh
+```
+   
+**Note**: On first run, Docker will automatically build the LDAP User Manager image from the included Dockerfile. This may take a few minutes to download dependencies and build the PHP/Apache container.
+
+**Access the services:**
+- **LDAP Server Protocol**: `ldap://localhost:389`
+- **LDAP Web Manager**: http://localhost:8080
+- **Keycloak**: http://localhost:8090
+
+**Login credentials:**
+- **LDAP Web Manager (web UI)**: `admin` / `admin`
+- **LDAP Server (protocol)**: `cn=admin,dc=min,dc=io` / `admin`
+- **Keycloak**: `admin` / `admin`
+
+**Stop everything:**
+```bash
+./stop.sh
+```
+
+## 🔒 Security & Production Considerations
+
+> **⚠️ IMPORTANT: This is a Proof of Concept (POC)**
+
+### Security Profile
+
+This POC demonstrates **secure client secret management practices**:
+
+- ✅ **NO HARDCODED CLIENT SECRETS** - All OAuth2/OpenID Connect client secrets are dynamically generated and retrieved via Keycloak's admin API
+- ✅ **Runtime Secret Generation** - Client secrets are created on-demand using proper API calls
+- ✅ **Dynamic Secret Retrieval** - Authentication flows fetch secrets from Keycloak at runtime
+- ✅ **Proper Test Isolation** - Mock secrets are parameterized (not static) for testing environments
+
+### Development vs Production
+
+**📋 Current POC State:**
+- Contains **demo user passwords in CSV files** for testing convenience
+- Uses **predictable admin credentials** (`admin`/`admin`) for development ease
+- Configured for **local development** with `localhost` endpoints
+- Includes **test organization data** with sample users and roles
+
+**🏗️ Production Migration Checklist:**
+
+When adapting this POC for production use, implement these security enhancements:
+
+- [ ] **Replace CSV password management** with secure user provisioning
+- [ ] **Implement proper credential management** (HashiCorp Vault, Azure Key Vault, AWS Secrets Manager)
+- [ ] **Configure TLS/SSL certificates** for all service communications
+- [ ] **Replace default admin credentials** with strong, unique passwords
+- [ ] **Implement proper network segmentation** and firewall rules
+- [ ] **Set up monitoring and audit logging** for all authentication events
+- [ ] **Configure backup and disaster recovery** procedures
+- [ ] **Implement proper RBAC** (Role-Based Access Control) policies
+- [ ] **Set up automated security scanning** and vulnerability management
+- [ ] **Configure production-grade load balancing** and high availability
+
+### Best Practices Demonstrated
+
+This POC follows OAuth2/OpenID Connect security best practices:
+
+- **Client Secret Management**: Proper API-based secret generation and retrieval
+- **Environment Separation**: Clear isolation between test and production configurations  
+- **Dynamic Configuration**: Runtime service discovery and configuration
+- **Audit Trail**: All authentication flows use proper logging and error handling
+
+**💡 Recommendation**: Use this POC as a foundation for understanding the architecture, then implement proper production security controls before deploying to any production environment.
+
 ## Table of Contents
 - [Features](#features)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
+- [Container-Based Architecture](#container-based-architecture)
 - [Quick Start](#quick-start)
+- [Security & Production Considerations](#-security--production-considerations)
 - [Keycloak Integration](#keycloak-integration)
 - [Admin-Only Startup](#admin-only-startup)
 - [LDAP Configuration](#ldap-configuration)
 - [User and Group Management](#user-and-group-management)
 - [Web UI Management](#web-ui-management)
+- [Keycloak Script Reference](#keycloak-script-reference)
+- [Testing and Verification](#testing-and-verification) 🧪
 - [Debugging and Troubleshooting](#debugging-and-troubleshooting)
+- [Script Reference & Migration](#script-reference--migration)
 - [LDAP Group Types and Compatibility](#ldap-group-types-and-compatibility)
 - [CSV File Structure and Influence](#csv-file-structure-and-influence)
 - [Development Notes](#development-notes)
@@ -22,6 +135,9 @@ A comprehensive Docker Compose setup for OpenLDAP with automated CSV to LDIF con
 
 - 🔒 **OpenLDAP Server**: Running on Alpine Linux with MDB backend
 - 🔐 **Keycloak Identity Provider**: Enterprise-grade identity and access management
+- 🐳 **Container-Based Orchestration**: Cross-platform execution eliminating Windows/WSL issues
+- 🌟 **Clean Professional Output**: Pre-installed tools with streamlined user experience
+- 🌐 **Automatic Network Detection**: Service names in containers, localhost on host
 - 🌐 **Web UI**: LDAP User Manager for browser-based administration
 - 📊 **Automated CSV Import**: Convert CSV files to LDIF and import automatically
 - 🎛️ **Multi-Mode Loading**: Admin-only startup with manual additional user loading
@@ -39,12 +155,21 @@ ldapkeycloakpoc/
 ├── data/
 │   ├── users.csv               # User data and group memberships
 │   └── admins.csv              # Admin user definitions
-├── python/
+├── python-bastion/
+│   ├── Dockerfile              # Custom container image with pre-installed tools
 │   └── csv_to_ldif.py          # CSV to LDIF conversion script
 ├── keycloak/                   # Keycloak management scripts
 │   ├── create_realm.sh         # Create new Keycloak realms
 │   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
-│   └── debug_realm_ldap.sh     # Debug realm and LDAP provider status
+│   ├── configure_mock_oauth2_idp.sh       # Configure Mock OAuth2 Identity Provider
+│   ├── configure_shared_clients.sh        # Create organization-aware shared clients
+│   ├── debug_realm_ldap.sh     # Debug realm and LDAP provider status
+│   ├── keycloak_details.sh     # Show Keycloak server status and configuration
+│   ├── keycloak_setup_full.sh  # Complete Keycloak setup (realm, LDAP, organizations)
+│   ├── organization_setup_guide.sh        # Interactive guide for organization features
+│   ├── setup_organizations.sh  # Configure organizations with domain mapping
+│   ├── sync_ldap.sh            # Synchronize LDAP users and roles with Keycloak
+│   └── update_role_mapper.sh   # Update LDAP role mapper configuration
 ├── ldap/
 │   ├── setup_ldap_data.sh      # LDAP container startup script  
 │   └── load_additional_users.sh # Load additional users after startup
@@ -54,12 +179,23 @@ ldapkeycloakpoc/
 │   └── ...
 ├── ldif/                       # Generated LDIF files directory
 │   ├── users.ldif              # Generated user and group data
-│   └── admins.ldif             # Generated admin group data
-├── start.sh                    # Main startup script
+│   ├── admins_only.ldif        # Generated admin-only data
+│   └── group_assign.ldif       # Generated group assignments
+├── dashboard/
+│   └── index.html              # POC dashboard with service links
+├── docs/
+│   └── WINDOWS_TROUBLESHOOTING.md  # Detailed Windows troubleshooting guide
+├── temp/
+│   └── log.txt                 # Temporary log files
+├── start.sh                    # LDAP-only startup script
 ├── stop.sh                     # Stop all services script
-├── start_all.sh                # Traditional complete setup script
+├── start_all_bastion.sh        # 🚀 RECOMMENDED: Container-based complete setup
+├── start_all_bastion_internal.sh # Internal script (runs inside container)
+├── start_all.sh                # ⚠️ Legacy: Traditional setup (Windows issues)
 ├── test_all.sh                 # Verification script for setup
-├── load_additional_users.sh    # Load additional users after startup
+├── test_jwt.sh                 # JWT token testing and validation
+├── quick_reference.sh          # Quick reference commands
+├── network_detect.sh           # Network detection utility for containers/host
 └── README.md                   # This file
 ```
 
@@ -68,58 +204,147 @@ ldapkeycloakpoc/
 - Docker and Docker Compose
 - LDAP client tools (optional, for testing): `brew install openldap` on macOS
 
-## Cross-Platform Compatibility 🌍
+## Container-Based Architecture 🐳
 
-This project now includes enhanced cross-platform support for Windows, macOS, and Linux environments.
+This project features a **streamlined container-based orchestration system** that eliminates host platform compatibility issues.
+
+### Enhanced Container-Based Execution
+
+**🚀 Primary Approach: `start_all_bastion.sh`**
+- **Cross-Platform Reliability**: Eliminates Windows/WSL/Git Bash path and command issues
+- **Clean Professional Output**: No messy package installation feedback - tools are pre-installed
+- **Automatic Network Detection**: Uses service names in containers, localhost on host
+- **Pre-installed Tools**: docker, curl, jq, ldap-utils ready immediately
+- **Consistent Environment**: All operations run in standardized Linux container
+
+### Script Architecture
+
+```
+Host System (Windows/macOS/Linux)
+├── start_all_bastion.sh        # 🚀 RECOMMENDED: Host wrapper script
+│   ├── Starts Docker services
+│   ├── Waits for container readiness  
+│   └── Executes → start_all_bastion_internal.sh (inside container)
+├── test_all.sh                 # 🧪 TEST: Host wrapper script
+│   └── Executes → test_all_internal.sh (inside container)
+├── test_jwt.sh                 # 🧪 JWT: Host wrapper script  
+│   └── Executes → test_jwt_internal.sh (inside container)
+├── start_all.sh                # ⚠️ LEGACY: Traditional host-based (Windows issues)
+└── network_detect.sh           # Network detection utility
+
+Container (python-bastion):
+├── start_all_bastion_internal.sh    # 🚀 Complete setup orchestrator
+├── test_all_internal.sh             # 🧪 Comprehensive testing suite
+├── test_jwt_internal.sh              # 🧪 JWT token validation
+└── keycloak/keycloak_setup_full.sh   # 🔧 Keycloak configuration master
+```
+
+**Wrapper Script Pattern:**
+1. **Detection**: Script detects if running on host or inside container
+2. **Container Check**: Verifies python-bastion container is running
+3. **Execution**: If on host → execute internal version inside container
+4. **Passthrough**: If already in container → execute directly
+
+### Benefits of Container-Based Approach
+
+| Feature | Traditional `start_all.sh` | Container-Based `start_all_bastion.sh` |
+|---------|----------------------------|----------------------------------------|
+| **Windows Support** | ⚠️ Path issues, Git Bash problems | ✅ Works perfectly |
+| **Tool Installation** | ⚠️ Messy installation output | ✅ Pre-installed, clean output |
+| **Network Detection** | ❌ Manual configuration | ✅ Automatic service name detection |
+| **Cross-Platform** | ⚠️ Platform-specific issues | ✅ Identical behavior everywhere |
+| **User Experience** | ⚠️ Cluttered feedback | ✅ Professional, streamlined output |
 
 ### Windows Support ✅
-- **Enhanced startup timing** for Windows Docker environments
-- **Robust service readiness checks** to handle slower initialization
-- **Detailed error diagnostics** for troubleshooting Windows-specific issues
-- **Comprehensive Windows troubleshooting guide**: See `WINDOWS_TROUBLESHOOTING.md`
+- **Path Translation Issues**: Eliminated by container execution
+- **Git Bash Compatibility**: No longer required - works with any terminal
+- **Tool Dependencies**: All tools pre-installed in container image
+- **Network Addressing**: Automatic detection handles container vs host context
 
-### Platform-Specific Features:
-- **Enhanced test script**: `./test_all.sh --debug` - Comprehensive diagnostics with detailed logging
-- **Windows troubleshooting guide**: `WINDOWS_TROUBLESHOOTING.md` - Complete Windows setup guide
-- **Cross-platform validation**: Automatic platform detection and Windows-specific recommendations
+### Container-Based Operations 🚀
 
-### Cross-Platform Support 🚀
-
-**All Python execution is now containerized!** No need to install Python locally on any platform.
+**All operations are now containerized for maximum compatibility!**
 
 **Perfect for:**
-- ✅ **Windows users** (no need for WSL or Linux tools)
-- ✅ **Users without Python installed**
-- ✅ **Consistent execution environment** across all platforms
-- ✅ **No dependency management hassles**
-- ✅ **Direct containerized execution via Docker commands**
+- ✅ **Windows users** (eliminates WSL/Git Bash issues)
+- ✅ **Cross-platform consistency** (identical behavior everywhere)
+- ✅ **Clean user experience** (no messy installation output)
+- ✅ **Pre-installed tools** (docker, curl, jq, ldap-utils ready immediately)
+- ✅ **Automatic network detection** (service names vs localhost)
 
 ### Usage Methods
 
-**All platforms use the same Docker-based approach:**
+**🚀 Recommended Container-Based Approach:**
 
 ```bash
-# Complete LDAP-Keycloak setup
-./start_all.sh mycompany
+# Complete LDAP-Keycloak setup (recommended)
+./start_all_bastion.sh mycompany --defaults
 
 # Interactive setup with confirmations
-./start_all.sh mycompany --check-steps
+./start_all_bastion.sh mycompany --check-steps
 
-# LDAP-only setup
+# Maintenance operations
+./start_all_bastion.sh mycompany --sync-only        # Sync LDAP data only
+./start_all_bastion.sh mycompany --load-users       # Load additional users only
+
+# LDAP-only setup (traditional)
 ./start.sh
 
-# Load additional users
-./ldap/load_additional_users.sh
-
-# Generate LDIF manually
-docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
-
-# Get help
-docker exec python-bastion python python/csv_to_ldif.py help
-
-# Interactive shell in container
-docker exec -it python-bastion bash
+# Manual container operations
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv
+docker exec -it python-bastion bash               # Interactive shell
 ```
+
+### Network Detection Features
+
+The system automatically detects execution context and uses appropriate URLs:
+
+**When running on HOST:**
+- Keycloak: `http://localhost:8090`
+- LDAP: `ldap://localhost:389`
+
+**When running in CONTAINERS:**
+- Keycloak: `http://keycloak:8080` 
+- LDAP: `ldap://ldap:389`
+
+### Enhanced User Experience 🌟
+
+The container-based approach delivers a **professional, streamlined experience**:
+
+#### Before (Traditional Approach)
+```
+⏳ Installing required tools...
+📦 Installing curl...
+Reading package lists... Done
+Building dependency tree... Done
+The following NEW packages will be installed:
+  curl libcurl4 libcurl3-gnutls libcurl4 libnghttp2-14
+✅ Installed: curl
+📦 Installing jq...
+Reading package lists... Done
+[... messy installation output ...]
+✅ Installed: jq
+```
+
+#### After (Container-Based Approach)
+```
+🐳 Running from python-bastion container - eliminating host platform issues
+🚀 Starting complete LDAP-Keycloak setup for realm: capgemini
+🎯 Defaults mode enabled - using default values for all prompts
+
+✅ All required tools available: docker, curl, jq, ldap-utils
+🔍 Environment Detection:
+   📦 Running inside container - using service names
+   🔗 Keycloak: http://keycloak:8080
+   🔗 LDAP: ldap://ldap:389
+```
+
+#### Key Improvements:
+- ✅ **No messy installation output** - tools are pre-installed
+- ✅ **Clear environment detection** - shows execution context
+- ✅ **Professional progress indicators** - clean, organized feedback
+- ✅ **Automatic network resolution** - no manual URL configuration
+- ✅ **Consistent experience** - identical output on all platforms
 
 ### Docker Compose Services
 
@@ -147,52 +372,6 @@ docker-compose build
 - If you want to pre-build before first run
 - Troubleshooting build issues
 
-## Quick Start
-
-### Complete LDAP-Keycloak Setup
-
-**All platforms use the same approach:**
-```bash
-# Complete automated setup with realm creation and LDAP integration
-./start_all.sh <realm-name>
-
-# Interactive mode with step-by-step confirmation
-./start_all.sh <realm-name> --check-steps
-```
-
-**Example:**
-```bash
-# Set up everything for "mycompany" realm
-./start_all.sh mycompany
-```
-
-### LDAP-Only Setup
-
-**Start LDAP services only (no Keycloak realm setup):**
-```bash
-./start.sh
-```
-   
-   **Note**: On first run, Docker will automatically build the LDAP User Manager image from the included Dockerfile. This may take a few minutes to download dependencies and build the PHP/Apache container.
-
-2. **Access the services:**
-   - **LDAP Server Protocol**: `ldap://localhost:389`
-   - **LDAP Web Manager**: http://localhost:8091
-   - **Keycloak**: http://localhost:8090
-
-3. **Login credentials:**
-   - **LDAP Web Manager (web UI)**: `admin` / `admin`
-   - **LDAP Server (protocol)**: `cn=admin,dc=mycompany,dc=local` / `admin`
-
-4. **Login to Keycloak:**
-   - **Username**: `admin`
-   - **Password**: `admin`
-
-5. **Stop everything:**
-   ```bash
-   ./stop.sh
-   ```
-
 ## Keycloak Integration
 
 This POC includes Keycloak for enterprise identity and access management with LDAP user federation.
@@ -217,11 +396,14 @@ This creates:
 
 #### Complete Automated Setup
 ```bash
-# Complete setup: services + realm + LDAP provider + role mapping + sync
-./start_all.sh company
+# 🚀 Recommended: Complete setup with container-based orchestration
+./start_all_bastion.sh company --defaults
 
 # Interactive mode with step-by-step confirmation
-./start_all.sh company --check-steps
+./start_all_bastion.sh company --check-steps
+
+# ⚠️ Legacy: Traditional approach (Windows compatibility issues)
+./start_all.sh company
 ```
 
 #### Manual Step-by-Step Setup
@@ -393,18 +575,18 @@ This will:
 - **`data/users.csv`**: Additional user data (loaded manually)
 
 ### CSV to LDIF Converter
-The `python/csv_to_ldif.py` script auto-detects based on filename:
+The `python-bastion/csv_to_ldif.py` script auto-detects based on filename:
 
 **Containerized Method:**
 ```bash
 # Process admin users (auto-detected from filename)
-docker exec python-bastion python python/csv_to_ldif.py data/admins.csv
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv
 
 # Process additional users (auto-detected from filename)
-docker exec python-bastion python python/csv_to_ldif.py data/users.csv
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/users.csv
 
 # Show help
-docker exec python-bastion python python/csv_to_ldif.py help
+docker exec python-bastion python python-bastion/csv_to_ldif.py help
 ```
 
 ## LDAP Configuration
@@ -436,6 +618,107 @@ dc=mycompany,dc=local
     ├── cn=admins,ou=groups,dc=mycompany,dc=local
     └── cn=developers,ou=groups,dc=mycompany,dc=local
 ```
+
+## Keycloak Script Reference
+
+The `keycloak/` directory contains specialized scripts for managing Keycloak configuration:
+
+> **🤖 Automation Status:** Scripts marked with ✅ are automatically executed by `start_all_bastion.sh`. Scripts marked with 🔧 are for manual use only.
+
+### Core Setup Scripts
+
+**✅ `keycloak_setup_full.sh <realm-name> [--check-steps] [--defaults]`** *(Master setup script - Auto-executed)*
+- Complete Keycloak setup orchestrator called by `start_all_bastion.sh`
+- Executes all realm creation, LDAP integration, and organization setup
+- Supports interactive (`--check-steps`) and automated (`--defaults`) modes
+- Consolidates all Keycloak configuration into a single modular script
+
+**✅ `create_realm.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Creates a new Keycloak realm with basic configuration
+- Sets up realm-specific admin user and role mappings
+- Configures default client scopes and protocol mappers
+
+**✅ `add_ldap_provider_for_keycloak.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Configures LDAP user federation provider in the specified realm
+- Sets up connection parameters, search bases, and authentication
+- Creates role and group mappers for LDAP synchronization
+
+**✅ `sync_ldap.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Synchronizes users and roles from LDAP to Keycloak
+- Triggers full user import and role mapping updates
+- Provides detailed status reporting and error handling
+
+### Organization & Advanced Features
+
+**✅ `setup_organizations.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Configures Keycloak Organizations feature (requires Keycloak 26+)
+- Creates organizations with domain mapping (e.g., `acme.realm.local`)
+- Sets up organization-specific role filtering and management
+
+**✅ `configure_shared_clients.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Creates shared clients with organization-aware role filtering
+- Configures protocol mappers for organization detection in JWT tokens
+- Sets up client scopes for multi-organization support
+
+**✅ `configure_mock_oauth2_idp.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+- Configures Mock OAuth2 server as external Identity Provider
+- Creates organization-specific OAuth2 clients and mappers
+- Enables multi-provider authentication testing scenarios
+
+### Debugging & Maintenance
+
+**🔧 `debug_realm_ldap.sh <realm-name>`** *(Manual use only)*
+- Simple diagnostics for realm and LDAP provider status
+- Tests basic connectivity and displays provider information
+- Useful for manual troubleshooting (not called by automated scripts)
+
+**✅ `keycloak_details.sh`** *(Auto-executed via keycloak_setup_full for status checks)*
+- Shows Keycloak server status, version, and configuration
+- Lists all realms and their basic properties
+- Displays enabled features and extension information
+
+**🔧 `organization_setup_guide.sh`** *(Interactive guide only)*
+- Displays organization setup concepts and step-by-step instructions
+- Educational resource for understanding organization features
+- Not executed automatically - run manually for guidance
+
+### Mapper Configuration
+
+**✅ `update_role_mapper.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+- Updates LDAP role mapper configuration and filters
+- Modifies role synchronization patterns and group mappings
+- Useful for adjusting which LDAP groups sync as Keycloak roles
+
+### Usage Examples
+
+```bash
+# Complete Keycloak setup (recommended - used by start_all_bastion.sh)
+./keycloak/keycloak_setup_full.sh mycompany                    # Interactive mode
+./keycloak/keycloak_setup_full.sh mycompany --defaults         # Automated mode
+./keycloak/keycloak_setup_full.sh mycompany --check-steps      # Step-by-step confirmation
+
+# Individual component setup (manual/advanced usage)
+./keycloak/create_realm.sh mycompany
+./keycloak/add_ldap_provider_for_keycloak.sh mycompany
+./keycloak/sync_ldap.sh mycompany
+
+# Organization-specific setup (manual/advanced usage)
+./keycloak/setup_organizations.sh mycompany acme xyz
+./keycloak/configure_shared_clients.sh mycompany acme xyz
+./keycloak/configure_mock_oauth2_idp.sh mycompany acme xyz
+
+# Debugging and maintenance
+./keycloak/debug_realm_ldap.sh mycompany
+./keycloak/keycloak_details.sh
+./keycloak/organization_setup_guide.sh
+```
+
+### Script Organization Summary
+
+- **🤖 Master Script (1):** `keycloak_setup_full.sh` - Complete setup orchestrator called by `start_all_bastion.sh`
+- **⚙️ Component Scripts (8):** Individual Keycloak configuration components executed by master script
+- **🔧 Manual Tools (2):** Troubleshooting and interactive guidance utilities
+- **📁 Total:** 11 focused, functional scripts with clear modular architecture
 
 ## User and Group Management
 
@@ -741,7 +1024,7 @@ For debugging the conversion process:
 
 ```bash
 # Generate LDIF manually
-docker exec python-bastion python python/csv_to_ldif.py
+docker exec python-bastion python python-bastion/csv_to_ldif.py
 
 # Check generated files
 cat ldif/users.ldif
@@ -778,7 +1061,7 @@ Each group contains:
 
 ### Alternative: groupOfNames
 
-If you need `groupOfNames` instead (uses full DN membership), modify `python/csv_to_ldif.py`:
+If you need `groupOfNames` instead (uses full DN membership), modify `python-bastion/csv_to_ldif.py`:
 
 ```python
 # Change this line:
@@ -819,7 +1102,7 @@ ldif.write(f"member: uid={member_uid},{USERS_OU}\n")
 
 Groups are created dynamically based on CSV content:
 ```python
-# From python/csv_to_ldif.py
+# From python-bastion/csv_to_ldif.py
 for group in row["groups"].split(";"):
     group = group.strip()
     groups.setdefault(group, []).append(user_dn)
@@ -833,7 +1116,7 @@ This means:
 
 ### Modifying User/Group Structure
 
-To change the LDAP structure, edit `python/csv_to_ldif.py`:
+To change the LDAP structure, edit `python-bastion/csv_to_ldif.py`:
 
 1. **Change base domain**: Modify `LDAP_DOMAIN` variable
 2. **Change OUs**: Modify `USERS_OU` and `GROUPS_OU` variables
@@ -847,7 +1130,7 @@ To change the LDAP structure, edit `python/csv_to_ldif.py`:
 2. LDAP container starts with Alpine Linux
    - Installs OpenLDAP, Python, and dependencies
    - Creates LDAP configuration with MDB backend and NIS schema
-   - Runs `python/csv_to_ldif.py` to convert CSV to LDIF
+   - Runs `python-bastion/csv_to_ldif.py` to convert CSV to LDIF
    - Starts LDAP server
    - Imports generated LDIF files
 4. Web UI container starts and connects to LDAP server
@@ -945,6 +1228,252 @@ By removing the `.git` directory, the code becomes part of your main repository 
 - **OpenLDAP**: The LDAP server implementation
 - **Alpine Linux**: Minimal container base image
 - **Docker**: Containerization platform
+
+## Script Reference & Migration
+
+### Primary Scripts (User-Facing)
+
+**🚀 RECOMMENDED: Container-Based Scripts**
+- `start_all_bastion.sh` - Complete LDAP-Keycloak setup (cross-platform)
+- `start.sh` - LDAP-only setup
+- `stop.sh` - Stop all services
+
+**🧪 TESTING: Container-Based Test Scripts**
+- `test_all.sh` - Comprehensive system testing and verification (cross-platform)  
+- `test_jwt.sh` - JWT token validation with organization users (cross-platform)
+
+**⚠️ LEGACY: Traditional Scripts**  
+- `start_all.sh` - Traditional setup (Windows compatibility issues)
+
+**🔧 INTERNAL: Container-Only Scripts**
+- `start_all_bastion_internal.sh` - Internal setup script (runs inside container - users never call directly)
+- `test_all_internal.sh` - Internal test script (runs inside container - users never call directly)
+- `test_jwt_internal.sh` - Internal JWT test script (runs inside container - users never call directly)
+- `network_detect.sh` - Network detection utility (sourced by other scripts)
+
+### Migration Guide
+
+**From Legacy to Container-Based:**
+```bash
+# Old approach (Windows issues)
+./start_all.sh myrealm
+
+# New approach (recommended)
+./start_all_bastion.sh myrealm --defaults
+```
+
+### Auxiliary Documentation Files
+
+The following auxiliary markdown files have been **consolidated into this README**:
+- ✅ `CONTAINER_EXECUTION.md` - Container usage information (integrated above)
+- ✅ `CONTAINER_NETWORK_GUIDE.md` - Network detection guide (integrated above) 
+- ✅ `NETWORK_IMPROVEMENTS_SUMMARY.md` - Enhancement summary (integrated above)
+- ⚠️ `WINDOWS_TROUBLESHOOTING.md` - **Keep for Windows-specific issues**
+
+**Recommendation:** The first three files can be removed as their content is now in the main README. Keep `WINDOWS_TROUBLESHOOTING.md` for detailed Windows-specific troubleshooting.
+
+## Testing and Verification
+
+### Container-Based Test Architecture 🐳
+
+Both test scripts use a **container wrapper architecture** for cross-platform compatibility:
+
+- **Host Scripts**: `test_all.sh` and `test_jwt.sh` (what users run)
+- **Internal Scripts**: `test_all_internal.sh` and `test_jwt_internal.sh` (run inside container)
+- **Benefits**: Eliminates Windows/Git Bash jq dependency issues, ensures consistent behavior
+
+### Comprehensive System Testing
+
+The `test_all.sh` script performs complete integration testing:
+
+```bash
+# 🚀 RECOMMENDED: Test all components (cross-platform)
+./test_all.sh                           # Test basic services only (no realm)
+./test_all.sh capgemini                 # Test with specific realm
+./test_all.sh mycompany                 # Test with custom realm
+
+# Example output
+🐳 Running comprehensive tests inside python-bastion container for cross-platform compatibility...
+✅ LDAP container - running
+✅ Keycloak container - running  
+✅ LDAP basic service - responding to anonymous queries
+✅ Keycloak service health - ready and accessible
+✅ Keycloak realm 'capgemini' - exists and accessible
+✅ LDAP provider configuration - properly configured
+✅ Organizations feature enabled - server and realm support confirmed
+```
+
+**Test Coverage:**
+- 🐳 **Docker Container Status**: Verifies all containers are running
+- 🔗 **Service Connectivity**: Tests LDAP and Keycloak accessibility
+- 🏢 **Realm Configuration**: Validates realm exists and is configured (with lowercase normalization)
+- 👥 **LDAP Integration**: Checks LDAP provider and user federation
+- 🎯 **Organization Features**: Tests Keycloak Organizations support (v26+)
+- 🔑 **Shared Clients**: Validates organization-aware client configuration
+- 🎭 **JWT Token Generation**: Tests authentication and token creation
+- 🛡️ **Role Mapping**: Verifies LDAP groups → Keycloak roles
+- 📝 **Naming Consistency**: Ensures realms, organizations, and usernames are lowercase
+
+### JWT Token Verification
+
+The `test_jwt.sh` script validates JWT tokens and role assignments with **organization test users**:
+
+```bash
+# 🚀 RECOMMENDED: Use organization test users (guaranteed to exist)
+./test_jwt.sh --defaults                           # Uses capgemini realm + org users
+./test_jwt.sh capgemini --defaults                 # Custom realm + org users  
+./test_jwt.sh mycompany --defaults                 # Any realm + org users
+
+# 🔧 ADVANCED: Test specific users
+./test_jwt.sh capgemini test-acme-admin test-xyz-user test-multi-org
+./test_jwt.sh myrealm alice bob charlie            # Test CSV users
+./test_jwt.sh myrealm test-acme-admin              # Test single organization user
+```
+
+**Default Organization Test Users:**
+
+These users are **guaranteed to exist** after running organization setup and provide realistic test scenarios:
+
+| Username | Organization | Role | Purpose |
+|----------|-------------|------|---------|
+| `test-acme-admin` | ACME Corp | Administrator | Test admin permissions and ACME org access |
+| `test-xyz-user` | XYZ Inc | Standard User | Test regular user permissions and XYZ org access |
+| `test-multi-org` | Multi-Org | Cross-Org User | Test users with access to multiple organizations |
+
+**Why Organization Test Users?**
+- ✅ **Guaranteed Existence**: Created automatically during organization setup
+- ✅ **Realistic Scenarios**: Represent actual business use cases
+- ✅ **Cross-Platform**: No dependency on CSV file variations
+- ✅ **Role Testing**: Cover admin, user, and multi-org scenarios
+- ✅ **Predictable**: Same users across all environments and setups
+
+**JWT Testing Features:**
+- 🐳 **Container Execution**: Runs inside python-bastion for cross-platform compatibility
+- 🔄 **CSV Password Integration**: Automatically reads passwords from `data/users.csv`
+- 🎯 **Organization Users**: Default users guaranteed to exist after organization setup
+- 🏢 **Realm Flexibility**: Works with any Keycloak realm name
+- 🔍 **JWT Decoding**: Base64 decodes and displays token contents with jq formatting
+- ✅ **Role Validation**: Shows assigned roles and organization memberships
+- 🌐 **Cross-Platform**: No jq dependency issues on Windows/Git Bash
+
+**Example JWT Test Output:**
+```bash
+🐳 Running JWT tests inside python-bastion container for cross-platform compatibility...
+=========================================
+JWT ROLE VERIFICATION  
+=========================================
+🎯 Using defaults: realm=capgemini, users=[test-acme-admin test-xyz-user test-multi-org]
+🔑 Getting current client secret...
+✅ Retrieved client secret for shared-web-client
+
+👤 Testing user: test-acme-admin
+🔐 Authenticating test-acme-admin...
+✅ Authentication successful
+🎫 JWT Token obtained and validated
+📋 Decoded JWT payload:
+{
+  "sub": "12345678-1234-1234-1234-123456789012",
+  "realm_roles": ["admin", "acme-admin"],
+  "organization": "acme",
+  "preferred_username": "test-acme-admin",
+  "email": "test-acme-admin@acme.capgemini.local"
+}
+```
+
+### Cross-Platform Testing Benefits
+
+**Before (Host-Based Testing):**
+- ❌ Windows/Git Bash: jq command not found
+- ❌ Path translation issues on Windows
+- ❌ Inconsistent behavior across platforms
+- ❌ Requires manual tool installation
+
+**After (Container-Based Testing):**
+- ✅ **Universal Compatibility**: Works on Windows, macOS, Linux
+- ✅ **No Tool Dependencies**: jq, curl pre-installed in container
+- ✅ **Consistent Results**: Identical behavior across platforms
+- ✅ **Clean Output**: Professional, streamlined user experience
+- ✅ **Automatic Detection**: Host vs container execution
+
+### Quick Testing Reference
+
+**🚀 Most Common Test Commands:**
+```bash
+# Complete system test (recommended first step)
+./test_all.sh mycompany
+
+# JWT test with organization users (most reliable)
+./test_jwt.sh --defaults
+
+# JWT test with specific realm and organization users
+./test_jwt.sh mycompany --defaults
+
+# Debug specific user authentication
+./test_jwt.sh mycompany test-acme-admin
+```
+
+**🔧 Advanced Testing Commands:**
+```bash
+# Test multiple specific users  
+./test_jwt.sh mycompany test-acme-admin test-xyz-user test-multi-org
+
+# Test CSV users (requires users exist in data/users.csv)
+./test_jwt.sh mycompany alice bob charlie
+
+# Test single CSV user with password lookup
+./test_jwt.sh mycompany alice
+```
+
+### Testing Workflow Integration
+
+**Complete Development Cycle:**
+```bash
+# 1. Start services with complete setup
+./start_all_bastion.sh mycompany --defaults
+
+# 2. Run comprehensive tests
+./test_all.sh mycompany
+
+# 3. Test JWT functionality with organization users  
+./test_jwt.sh --defaults
+
+# 4. Make changes to configuration...
+
+# 5. Re-test specific components
+./test_jwt.sh mycompany test-acme-admin    # Test single user
+```
+
+### Troubleshooting Test Failures
+
+**Container Not Running:**
+```bash
+❌ python-bastion container not running. Please start services first:
+   ./start_all_bastion.sh
+
+# Solution: Start services first
+./start_all_bastion.sh mycompany --defaults
+```
+
+**Authentication Failures:**
+```bash
+❌ Failed to get admin token. Is Keycloak running with capgemini realm?
+
+# Debug steps:
+1. Check container status: docker ps
+2. Check Keycloak logs: docker logs keycloak  
+3. Verify realm exists: ./test_all.sh capgemini
+4. Check LDAP integration: ./keycloak/debug_realm_ldap.sh capgemini
+```
+
+**Organization User Issues:**
+```bash
+❌ User test-acme-admin authentication failed
+
+# Solutions:
+1. Ensure organization setup completed: ./test_all.sh capgemini
+2. Check LDAP users exist: ldapsearch -x -H ldap://localhost:389 -b "ou=users,dc=mycompany,dc=local"
+3. Verify LDAP sync: ./keycloak/sync_ldap.sh capgemini
+```
 
 ## License
 

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LDAP-Keycloak POC Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .warning {
+            background: #ff6b6b;
+            color: white;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #e74c3c;
+        }
+
+        .warning h3 {
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+
+        .services {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .service-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--accent-color);
+        }
+
+        .ldap { --accent-color: #3498db; }
+        .keycloak { --accent-color: #9b59b6; }
+        .atlas { --accent-color: #2ecc71; }
+        .dashboard { --accent-color: #f39c12; }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .service-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .service-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .service-description {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .service-link {
+            display: inline-block;
+            background: var(--accent-color);
+            color: white;
+            text-decoration: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .service-link:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .credentials {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .credentials h4 {
+            color: #856404;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .credential-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .credential-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .credential-value {
+            color: #dc3545;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 20px 30px;
+            text-align: center;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #2ecc71;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .services {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 LDAP-Keycloak POC Dashboard</h1>
+            <p>Centralized access to all services in your authentication stack</p>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ Security Warning - Development Environment</h3>
+            <p><strong>This setup uses default credentials for demonstration purposes.</strong></p>
+            <p>🚨 <strong>NEVER use these credentials in production!</strong> Change all passwords and secure your services before deploying to production environments.</p>
+        </div>
+
+        <div class="services">
+            <!-- LDAP Service -->
+            <div class="service-card ldap">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">LD</div>
+                    <div class="service-name">LDAP Directory</div>
+                </div>
+                <div class="service-description">
+                    OpenLDAP directory service for user and group management. Primary authentication source.
+                </div>
+                <a href="http://localhost:8080" class="service-link" target="_blank">
+                    🌐 Open LDAP Web Manager
+                </a>
+                <div class="credentials">
+                    <h4>Default Credentials</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Web UI:</span>
+                        <span class="credential-value">admin / admin</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">LDAP Bind DN:</span>
+                        <span class="credential-value">cn=admin,dc=min,dc=io</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">LDAP Password:</span>
+                        <span class="credential-value">admin</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Protocol:</span>
+                        <span class="credential-value">ldap://localhost:389</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keycloak Service -->
+            <div class="service-card keycloak">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">KC</div>
+                    <div class="service-name">Keycloak IAM</div>
+                </div>
+                <div class="service-description">
+                    Identity and Access Management platform. Handles authentication, authorization, and SSO.
+                </div>
+                <a href="http://localhost:8090" class="service-link" target="_blank">
+                    🌐 Open Keycloak Console
+                </a>
+                <div class="credentials">
+                    <h4>Default Credentials</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Master Admin:</span>
+                        <span class="credential-value">admin / admin</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Realm Admin:</span>
+                        <span class="credential-value">admin-{realm} / admin-{realm}</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Base URL:</span>
+                        <span class="credential-value">http://localhost:8090</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Atlas Network Monitor -->
+            <div class="service-card atlas">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">AT</div>
+                    <div class="service-name">Weave Scope</div>
+                </div>
+                <div class="service-description">
+                    Real-time network topology visualization. Interactive container and network monitoring with live updates.
+                </div>
+                <a href="http://localhost:4040" class="service-link" target="_blank">
+                    🌐 Open Weave Scope Dashboard
+                </a>
+                <div class="credentials">
+                    <h4>Service Information</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Access:</span>
+                        <span class="credential-value">No authentication required</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Port:</span>
+                        <span class="credential-value">4040</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Features:</span>
+                        <span class="credential-value">Real-time topology, Container monitoring</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mock OAuth2 Server -->
+            <div class="service-card" style="--accent-color: #e67e22;">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">O2</div>
+                    <div class="service-name">Mock OAuth2</div>
+                </div>
+                <div class="service-description">
+                    OAuth2/OIDC testing server for integration development. Test authentication flows without external dependencies.
+                </div>
+                <a href="http://localhost:8081" class="service-link" target="_blank">
+                    🌐 Open OAuth2 Server
+                </a>
+                <div class="credentials">
+                    <h4>Service Information</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">OIDC Config:</span>
+                        <span class="credential-value">/default/.well-known/openid_configuration</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Token Endpoint:</span>
+                        <span class="credential-value">/default/token</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Default Issuer:</span>
+                        <span class="credential-value">default</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Info -->
+            <div class="service-card dashboard">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">DB</div>
+                    <div class="service-name">This Dashboard</div>
+                </div>
+                <div class="service-description">
+                    Lightweight static dashboard providing centralized access to all services with credentials reference.
+                </div>
+                <a href="http://localhost:8888" class="service-link" target="_blank">
+                    🌐 Reload Dashboard
+                </a>
+                <div class="credentials">
+                    <h4>Service Information</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Container:</span>
+                        <span class="credential-value">nginx:alpine</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Port:</span>
+                        <span class="credential-value">8888</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">File:</span>
+                        <span class="credential-value">./dashboard/index.html</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🚀 LDAP-Keycloak POC Environment | 
+            <strong>Development Only</strong> | 
+            Remember to secure credentials in production!</p>
+        </div>
+    </div>
+
+    <script>
+        // Simple status check for visual feedback
+        document.addEventListener('DOMContentLoaded', function() {
+            const services = [
+                { url: 'http://localhost:8080', card: '.ldap' },
+                { url: 'http://localhost:8090', card: '.keycloak' },
+                { url: 'http://localhost:4040', card: '.atlas' }
+            ];
+
+            // This would normally check service status, but due to CORS we'll keep indicators green
+            // In a real implementation, you'd use a backend service to check status
+            console.log('Dashboard loaded - all services should be running');
+        });
+    </script>
+</body>
+</html>

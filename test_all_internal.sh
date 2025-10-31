@@ -1,28 +1,8 @@
 #!/bin/bash
 
-# test_all.sh
-# Enhanced verification script for LDAP-Keycloak POC setup
-# This script runs inside the python-bastion container where all tools are available
-# This eliminates cross-platform compatibility issues with Windows/Git Bash
-
-# Check if we're running inside the container or from host
-if [ -f /.dockerenv ] || [ "$CONTAINER_RUNTIME" = "true" ]; then
-    # We're inside the container - run the internal version
-    exec ./test_all_internal.sh "$@"
-else
-    # We're on the host - execute inside python-bastion container
-    echo "🐳 Running comprehensive tests inside python-bastion container for cross-platform compatibility..."
-    
-    # Check if python-bastion container is running
-    if ! docker ps --format "table {{.Names}}" | grep -q "python-bastion"; then
-        echo "❌ python-bastion container not running. Please start services first:"
-        echo "   ./start_all_bastion.sh"
-        exit 1
-    fi
-    
-    # Execute the internal script inside the container
-    docker exec -it python-bastion bash -c "cd /workspace && ./test_all_internal.sh $*"
-fi
+# test_all_internal.sh
+# Enhanced verification script for LDAP-Keycloak POC setup (Internal - runs inside python-bastion container)
+# Tests all components configured by start_all.sh with debugging capabilities
 
 # Colors for output
 RED='\033[0;31m'
@@ -283,12 +263,12 @@ echo ""
 
 # Test 5: Keycloak service accessibility
 echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} service...${NC}"
-keycloak_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8090/health/ready 2>/dev/null)
+keycloak_health=$(curl -s -o /dev/null -w "%{http_code}" http://keycloak:8080/health/ready 2>/dev/null)
 if [ "$keycloak_health" = "200" ]; then
     check_result "pass" "${MAGENTA}Keycloak${NC} service health" "ready and accessible"
 else
     # Try alternative health check
-    keycloak_alt=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8090/realms/master 2>/dev/null)
+    keycloak_alt=$(curl -s -o /dev/null -w "%{http_code}" http://keycloak:8080/realms/master 2>/dev/null)
     if [ "$keycloak_alt" = "200" ]; then
         check_result "pass" "${MAGENTA}Keycloak${NC} service health" "accessible via master realm"
     else
@@ -299,7 +279,7 @@ fi
 # Test 6: Keycloak realm exists
 if [ -n "$REALM_NAME" ]; then
     echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} realm...${NC}"
-    realm_check=$(curl -s "http://localhost:8090/realms/${REALM_NAME}" 2>/dev/null)
+    realm_check=$(curl -s "http://keycloak:8080/realms/${REALM_NAME}" 2>/dev/null)
     if echo "$realm_check" | grep -q "\"realm\":\"${REALM_NAME}\""; then
         check_result "pass" "${MAGENTA}Keycloak${NC} realm '${REALM_NAME}'" "exists and accessible"
     else
@@ -313,7 +293,8 @@ echo ""
 # Test 7: Get Keycloak admin token and test LDAP provider
 if [ -n "$REALM_NAME" ]; then
     echo -e "${YELLOW}Testing ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} integration...${NC}"
-    admin_token=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
+    # Get admin token for API calls
+    admin_token=$(curl -s -X POST "http://keycloak:8080/realms/${REALM_NAME}/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "username=admin-${REALM_NAME}" \
         -d "password=admin-${REALM_NAME}" \
@@ -324,7 +305,7 @@ if [ -n "$REALM_NAME" ]; then
         check_result "pass" "${MAGENTA}Keycloak${NC} realm admin authentication" "token obtained successfully"
         
         # Test LDAP provider exists
-        ldap_providers=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/components?type=org.keycloak.storage.UserStorageProvider" \
+        ldap_providers=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/components?type=org.keycloak.storage.UserStorageProvider" \
             -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
         
         if echo "$ldap_providers" | grep -q "ldap-provider"; then
@@ -334,7 +315,7 @@ if [ -n "$REALM_NAME" ]; then
         fi
         
         # Test synced users count
-        users_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/users?max=100" \
+        users_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/users?max=100" \
             -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
         synced_users=$(echo "$users_response" | grep -o '"username"' | wc -l)
         
@@ -413,12 +394,12 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
     echo -e "${YELLOW}Testing Organizations feature enablement...${NC}"
     
     # Get current realm configuration for comprehensive check
-    realm_config_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}" \
+    realm_config_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}" \
         -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
     
     if [ -n "$realm_config_response" ]; then
         # Test 1: Check server-level Organizations feature
-        server_features_response=$(curl -s -X GET "http://localhost:8090/admin/serverinfo" \
+        server_features_response=$(curl -s -X GET "http://keycloak:8080/admin/serverinfo" \
             -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
         
         if echo "$server_features_response" | grep -q '"name":"ORGANIZATION"' && echo "$server_features_response" | grep -q '"enabled":true'; then
@@ -448,7 +429,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
         fi
         
         # Test 4: Check Organizations API accessibility
-        org_api_response=$(curl -s -w "%{http_code}" -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/organizations" \
+        org_api_response=$(curl -s -w "%{http_code}" -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/organizations" \
             -H "Authorization: Bearer ${admin_token}" \
             -o /tmp/org_api_check.json 2>/dev/null)
         
@@ -518,7 +499,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
                 organizations=$(cat /tmp/org_api_check.json)
                 
                 # Check if organization-specific Mock OAuth2 IdPs exist at realm level
-                all_idps_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/identity-provider/instances" \
+                all_idps_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/identity-provider/instances" \
                     -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
                 
                 mock_idp_count=$(echo "$all_idps_response" | grep -o '"alias":"mock-oauth2-[^"]*"' | wc -l | tr -d ' ')
@@ -530,14 +511,8 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
                     org_with_idp_count=0
                     total_orgs=0
                     
-                    # Parse organization IDs and names (compatible with Windows/Git Bash)
-                    if command -v python3 >/dev/null 2>&1; then
-                        org_ids=$(echo "$organizations" | python3 -c "import sys, json; [print(org['id']) for org in json.load(sys.stdin)]" 2>/dev/null)
-                        org_names=$(echo "$organizations" | python3 -c "import sys, json; [print(org['name']) for org in json.load(sys.stdin)]" 2>/dev/null)
-                    elif command -v python >/dev/null 2>&1; then
-                        org_ids=$(echo "$organizations" | python -c "import sys, json; [print(org['id']) for org in json.load(sys.stdin)]" 2>/dev/null)
-                        org_names=$(echo "$organizations" | python -c "import sys, json; [print(org['name']) for org in json.load(sys.stdin)]" 2>/dev/null)
-                    elif command -v jq >/dev/null 2>&1; then
+                    # Parse organization IDs and names
+                    if command -v jq >/dev/null 2>&1; then
                         org_ids=$(echo "$organizations" | jq -r '.[].id' 2>/dev/null)
                         org_names=$(echo "$organizations" | jq -r '.[].name' 2>/dev/null)
                         
@@ -545,7 +520,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
                             total_orgs=$((total_orgs + 1))
                             
                             # Check if organization has any Mock OAuth2 IdP linked
-                            org_idp_response=$(curl -s -w "%{http_code}" -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/organizations/${org_id}/identity-providers" \
+                            org_idp_response=$(curl -s -w "%{http_code}" -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/organizations/${org_id}/identity-providers" \
                                 -H "Authorization: Bearer ${admin_token}" \
                                 -o /tmp/org_idp_check.json 2>/dev/null)
                             
@@ -570,7 +545,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
                         # Clean up temp file
                         rm -f /tmp/org_idp_check.json 2>/dev/null
                     else
-                        check_result "warn" "Organizations IdP linking test" "Python and jq not available - skipping detailed test"
+                        check_result "warn" "Organizations IdP linking test" "jq not available - skipping detailed test"
                     fi
                 else
                     check_result "fail" "Mock OAuth2 Identity Providers" "no organization-specific IdPs found"
@@ -600,7 +575,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
     echo -e "${YELLOW}Testing organization-aware shared clients...${NC}"
     
     # Test shared-web-client exists
-    web_client_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
+    web_client_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
         -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
     
     if echo "$web_client_response" | grep -q "shared-web-client"; then
@@ -611,7 +586,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
         
         if [ -n "$WEB_CLIENT_UUID" ]; then
             # Get client secret
-            web_client_secret_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/client-secret" \
+            web_client_secret_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/client-secret" \
                 -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
             WEB_CLIENT_SECRET=$(echo "$web_client_secret_response" | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
             
@@ -630,7 +605,7 @@ if [ -n "$REALM_NAME" ] && [ -n "$admin_token" ]; then
     fi
     
     # Test shared-api-client exists
-    api_client_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients?clientId=shared-api-client" \
+    api_client_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients?clientId=shared-api-client" \
         -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
     
     if echo "$api_client_response" | grep -q "shared-api-client"; then
@@ -646,7 +621,7 @@ echo ""
     
     if [ -n "$WEB_CLIENT_UUID" ]; then
         # Get protocol mappers for web client
-        mappers_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/protocol-mappers/models" \
+        mappers_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/clients/${WEB_CLIENT_UUID}/protocol-mappers/models" \
             -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
         
         # Check for realm role mapper (could be named "realm roles", "realm_access", or "realm_access-structure")
@@ -709,7 +684,7 @@ echo ""
         
             echo -e "${BLUE}🧪 Testing user: ${TEST_USERNAME} (expected roles: ${EXPECTED_ROLES})${NC}"
             
-            token_response=$(curl -s -X POST "http://localhost:8090/realms/${REALM_NAME}/protocol/openid-connect/token" \
+            token_response=$(curl -s -X POST "http://keycloak:8080/realms/${REALM_NAME}/protocol/openid-connect/token" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
                 -d "username=${TEST_USERNAME}" \
                 -d "password=${TEST_PASSWORD}" \
@@ -838,13 +813,10 @@ echo ""
                         
                         if [ "$DEBUG_MODE" = true ]; then
                             echo -e "${CYAN}📋 Complete JWT payload for ${TEST_USERNAME}:${NC}"
-                            # Use Python for JSON formatting (more portable than jq)
-                            if command -v python3 >/dev/null 2>&1; then
-                                echo "$DECODED_JWT" | python3 -m json.tool 2>/dev/null || echo "$DECODED_JWT"
-                            elif command -v python >/dev/null 2>&1; then
-                                echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
+                            if command -v jq >/dev/null 2>&1; then
+                                echo "$DECODED_JWT" | jq . 2>/dev/null || echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
                             else
-                                echo "$DECODED_JWT"
+                                echo "$DECODED_JWT" | python -m json.tool 2>/dev/null || echo "$DECODED_JWT"
                             fi
                             echo ""
                         fi
@@ -923,7 +895,7 @@ if [ -n "$REALM_NAME" ]; then
     
     # Check for organization-specific roles in Keycloak
     if [ -n "$admin_token" ]; then
-        roles_response=$(curl -s -X GET "http://localhost:8090/admin/realms/${REALM_NAME}/roles" \
+        roles_response=$(curl -s -X GET "http://keycloak:8080/admin/realms/${REALM_NAME}/roles" \
             -H "Authorization: Bearer ${admin_token}" 2>/dev/null)
         
         acme_roles_count=$(echo "$roles_response" | grep -o '"name":"acme_[^"]*"' | wc -l)

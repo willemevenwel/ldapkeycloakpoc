@@ -11,6 +11,17 @@ CYAN='\033[0;36m'
 WHITE='\033[0;37m'
 NC='\033[0m' # No Color
 
+# Get script directory for relative imports
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source network detection utility
+if [ -f "${SCRIPT_DIR}/../network_detect.sh" ]; then
+    source "${SCRIPT_DIR}/../network_detect.sh"
+else
+    echo -e "${RED}❌ Network detection utility not found${NC}"
+    exit 1
+fi
+
 # Simple debug script to check realm and LDAP provider status
 
 if [ $# -eq 0 ]; then
@@ -22,7 +33,7 @@ fi
 REALM="$1"
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"
-KEYCLOAK_URL="http://localhost:8090"
+KEYCLOAK_URL="$(get_keycloak_url)"
 
 echo "🔍 Checking realm: ${REALM}"
 

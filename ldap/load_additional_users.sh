@@ -13,10 +13,26 @@ NC='\033[0m' # No Color
 
 # load_additional_users.sh
 # Script to manually load additional users into LDAP after startup
-# Usage: ./ldap/load_additional_users.sh [realm-name]
+# Usage: ./ldap/load_additional_users.sh [realm-name] [--defaults]
 
-# Get realm name from parameter if provided
-REALM_NAME="$1"
+# Parse command line arguments
+USE_DEFAULTS=false
+REALM_NAME=""
+
+for arg in "$@"; do
+    case $arg in
+        --defaults)
+            USE_DEFAULTS=true
+            shift
+            ;;
+        *)
+            if [ -z "$REALM_NAME" ]; then
+                REALM_NAME="$arg"
+            fi
+            shift
+            ;;
+    esac
+done
 
 echo -e "🔄 Loading additional users into ${CYAN}LDAP${NC}..."
 
@@ -70,7 +86,7 @@ echo -e "✅ ${CYAN}LDAP${NC} containers are running"
 # Generate additional users LDIF
 
 echo "📝 Generating LDIF for additional users using containerized Python..."
-docker exec python-bastion python python/csv_to_ldif.py data/users.csv
+docker exec python-bastion python python-bastion/csv_to_ldif.py data/users.csv
 
 if [ $? -ne 0 ]; then
     echo "❌ Error: Failed to generate additional users LDIF"
@@ -221,12 +237,18 @@ if [ "$IMPORT_SUCCESS" = true ]; then
     echo -e "${YELLOW}   This will synchronize the newly added ${CYAN}LDAP${NC} users and roles with Keycloak${NC}"
     echo -e "${YELLOW}   Recommended to run this to make the new users available in Keycloak${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    if [ -n "$REALM_NAME" ]; then
-        echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak realm '${REALM_NAME}' now? (Y/n - default is Yes): ${NC}"
+    
+    if [ "$USE_DEFAULTS" = true ]; then
+        echo -e "${CYAN}Using default: Syncing ${CYAN}LDAP${NC} to Keycloak (--defaults mode)${NC}"
+        run_sync="Y"
     else
-        echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak now? (Y/n - default is Yes): ${NC}"
+        if [ -n "$REALM_NAME" ]; then
+            echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak realm '${REALM_NAME}' now? (Y/n - default is Yes): ${NC}"
+        else
+            echo -en "${CYAN}Do you want to sync ${CYAN}LDAP${NC} to Keycloak now? (Y/n - default is Yes): ${NC}"
+        fi
+        read -r run_sync
     fi
-    read -r run_sync
     if [ "${run_sync}" = "N" ] || [ "${run_sync}" = "n" ]; then
         echo -e "${YELLOW}Skipped ${CYAN}LDAP${NC} sync. You can run it manually later with:${NC}"
         if [ -n "$REALM_NAME" ]; then

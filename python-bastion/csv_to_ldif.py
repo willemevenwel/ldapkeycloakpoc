@@ -13,7 +13,7 @@ if len(sys.argv) > 1:
     if arg in ["help", "-h", "--help"]:
         print("CSV to LDIF Converter - Auto-detection support")
         print("=============================================")
-        print("Usage: docker exec python-bastion python python/csv_to_ldif.py [csv_file] [mode]")
+        print("Usage: docker exec python-bastion python python-bastion/csv_to_ldif.py [csv_file] [mode]")
         print("")
         print("Arguments:")
         print("  csv_file   - Path to CSV file (default: data/users.csv)")
@@ -25,9 +25,9 @@ if len(sys.argv) > 1:
         print("  data/users.csv  - Additional user data (for manual loading)")
         print("")
         print("Examples:")
-        print("  docker exec python-bastion python python/csv_to_ldif.py data/admins.csv    # Process admin users")
-        print("  docker exec python-bastion python python/csv_to_ldif.py data/users.csv     # Process additional users")
-        print("  docker exec python-bastion python python/csv_to_ldif.py data/admins.csv admins    # Force admin mode")
+        print("  docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv    # Process admin users")
+        print("  docker exec python-bastion python python-bastion/csv_to_ldif.py data/users.csv     # Process additional users")
+        print("  docker exec python-bastion python python-bastion/csv_to_ldif.py data/admins.csv admins    # Force admin mode")
         print("")
         sys.exit(0)
     elif arg in ["admins", "additional"]:
