@@ -179,6 +179,10 @@ EOF
 
 # Function to sync roles
 sync_roles() {
+    # Wait for Keycloak to be ready for sync operations
+    echo -e "${CYAN}⏳ Waiting for Keycloak to be ready for sync operations...${NC}"
+    sleep 10  # Give Keycloak time to fully register the mapper before attempting sync
+    
     echo -e "${YELLOW}🔄 Syncing roles from ${CYAN}LDAP${NC}...${NC}"
     
     if [ -n "$ROLE_MAPPER_ID" ] && [ "$ROLE_MAPPER_ID" != "null" ]; then

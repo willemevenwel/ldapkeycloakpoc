@@ -48,7 +48,11 @@ fi
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"
 KEYCLOAK_URL="$(get_keycloak_url)"
-MOCK_OAUTH2_URL="http://localhost:8081"  # OAuth2 mock doesn't need container resolution
+# Use specialized function for Keycloak's Mock OAuth2 IdP connection
+# (Keycloak runs in container, so always needs container network name)
+MOCK_OAUTH2_URL_FOR_KEYCLOAK="$(get_mock_oauth2_url_for_keycloak)"
+# Use regular function for health checks from the script
+MOCK_OAUTH2_URL="$(get_mock_oauth2_url)"
 
 echo -e "${GREEN}🔧 Configuring Mock OAuth2 Server as Identity Provider for realm: ${REALM}${NC}"
 
@@ -126,10 +130,11 @@ configure_mock_oauth2_idp() {
         echo -e "${CYAN}🏢 Creating IdP for organization: ${ORG_NAME} (alias: ${IDP_ALIAS})${NC}"
         
         # Use organization-specific Mock OAuth2 endpoints
-        AUTH_URL="${MOCK_OAUTH2_URL}/${org_prefix}/authorize"
-        TOKEN_URL="${MOCK_OAUTH2_URL}/${org_prefix}/token"
-        ISSUER="${MOCK_OAUTH2_URL}/${org_prefix}"
-        JWKS_URL="${MOCK_OAUTH2_URL}/${org_prefix}/jwks"
+        # Use Keycloak-specific URL since Keycloak will be connecting to these endpoints
+        AUTH_URL="${MOCK_OAUTH2_URL_FOR_KEYCLOAK}/${org_prefix}/authorize"
+        TOKEN_URL="${MOCK_OAUTH2_URL_FOR_KEYCLOAK}/${org_prefix}/token"
+        ISSUER="${MOCK_OAUTH2_URL_FOR_KEYCLOAK}/${org_prefix}"
+        JWKS_URL="${MOCK_OAUTH2_URL_FOR_KEYCLOAK}/${org_prefix}/jwks"
         
         echo -e "${CYAN}   📋 Configuration:${NC}"
         echo -e "${CYAN}      • Authorization URL: ${AUTH_URL}${NC}"
@@ -438,7 +443,8 @@ echo -e "${GREEN}📋 Configuration Summary:${NC}"
 echo -e "${GREEN}   • Realm: ${REALM}${NC}"
 echo -e "${GREEN}   • Identity Provider: mock-oauth2${NC}"
 echo -e "${GREEN}   • Organizations: ${ORGANIZATION_PREFIXES[*]}${NC}"
-echo -e "${GREEN}   • Mock OAuth2 URL: ${MOCK_OAUTH2_URL}${NC}"
+echo -e "${GREEN}   • Mock OAuth2 URL (for scripts): ${MOCK_OAUTH2_URL}${NC}"
+echo -e "${GREEN}   • Mock OAuth2 URL (for Keycloak): ${MOCK_OAUTH2_URL_FOR_KEYCLOAK}${NC}"
 
 echo ""
 echo -e "${GREEN}🌐 Access URLs:${NC}"

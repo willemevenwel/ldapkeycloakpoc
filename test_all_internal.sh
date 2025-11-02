@@ -336,7 +336,13 @@ echo ""
 
 # Test 8: LDAP Web Manager
 echo -e "${YELLOW}Testing ${CYAN}LDAP${NC} Web Manager...${NC}"
-webui_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null)
+# Use container name when running inside a container, localhost when on host
+if [ -f "/.dockerenv" ]; then
+    LDAP_MANAGER_URL="http://ldap-manager:80"
+else
+    LDAP_MANAGER_URL="http://localhost:8080"
+fi
+webui_health=$(curl -s -o /dev/null -w "%{http_code}" ${LDAP_MANAGER_URL} 2>/dev/null)
 if [ "$webui_health" = "200" ]; then
     check_result "pass" "${CYAN}LDAP${NC} Web Manager" "accessible on port 8080"
 else

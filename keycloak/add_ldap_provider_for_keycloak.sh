@@ -37,7 +37,9 @@ ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
 KEYCLOAK_URL="$(get_keycloak_url)"
-LDAP_URL="$(get_ldap_url)"
+# Use specialized function for Keycloak's LDAP connection
+# (Keycloak runs in container, so always needs container network name)
+LDAP_URL="$(get_ldap_url_for_keycloak)"
 
 echo -e "${GREEN}🔧 Configuring ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} Provider for realm: ${REALM}${NC}"
 

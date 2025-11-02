@@ -55,6 +55,11 @@ done
 
 echo -e "${GREEN}LDAP server is ready!${NC}"
 
+# Additional wait for write operations readiness
+# LDAP responds to queries but may not be ready for data imports yet
+echo -e "${CYAN}Waiting for LDAP write operations to be ready...${NC}"
+sleep 5  # Give LDAP additional time to fully initialize for write operations
+
 # Copy and import LDIF files
 echo -e "${CYAN}Importing LDIF data...${NC}"
 

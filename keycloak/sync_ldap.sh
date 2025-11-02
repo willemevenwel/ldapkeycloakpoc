@@ -97,6 +97,10 @@ find_ldap_provider() {
 
 # Function to sync users
 sync_users() {
+    # Wait for Keycloak to be ready for sync operations
+    echo -e "${CYAN}⏳ Waiting for Keycloak to be ready for sync operations...${NC}"
+    sleep 10  # Give Keycloak time to fully initialize sync endpoints
+    
     echo -e "${YELLOW}🔄 Syncing users from ${CYAN}LDAP${NC}...${NC}"
     
     USER_SYNC_RESPONSE=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/user-storage/${LDAP_ID}/sync?action=triggerFullSync" \

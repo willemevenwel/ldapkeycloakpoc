@@ -200,7 +200,10 @@ else
 fi
 
 echo ""
-echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"\necho -e "   ${CYAN}LDAP${NC} Protocol:            ${BLUE}ldap://localhost:389${NC}"\necho -e "   ${CYAN}LDAP${NC} Web Manager:         ${BLUE}http://localhost:8080${NC}"\necho -e "   ${CYAN}LDAP${NC} Web Manager Login:   ${YELLOW}admin / admin${NC}"
+echo -e "🌐 You can now access the updated ${CYAN}LDAP${NC}:"
+echo -e "   ${CYAN}LDAP${NC} Protocol:            ${BLUE}ldap://localhost:389${NC}"
+echo -e "   ${CYAN}LDAP${NC} Web Manager:         ${BLUE}http://localhost:8080${NC}"
+echo -e "   ${CYAN}LDAP${NC} Web Manager Login:   ${YELLOW}admin / admin${NC}"
 echo ""
 echo "📊 To verify the import, you can run:"
 echo -e "   ${YELLOW}ldapsearch -x -H ldap://localhost:389 -D 'cn=admin,dc=min,dc=io' -w admin -b 'ou=users,dc=min,dc=io' '(objectClass=inetOrgPerson)'${NC}"

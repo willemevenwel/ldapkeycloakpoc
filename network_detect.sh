@@ -35,7 +35,7 @@ get_keycloak_url() {
     fi
 }
 
-# Function to get LDAP URL based on environment
+# Function to get LDAP URL for client connections (scripts connecting TO LDAP)
 get_ldap_url() {
     if is_running_in_container; then
         echo "ldap://ldap:389"
@@ -44,13 +44,25 @@ get_ldap_url() {
     fi
 }
 
-# Function to get Mock OAuth2 URL based on environment
+# Function to get LDAP URL for Keycloak configuration
+# Keycloak always runs in a container, so it always needs the container network name
+get_ldap_url_for_keycloak() {
+    echo "ldap://ldap:389"
+}
+
+# Function to get Mock OAuth2 URL for client connections (scripts connecting TO Mock OAuth2)
 get_mock_oauth2_url() {
     if is_running_in_container; then
         echo "http://mock-oauth2-server:8080"
     else
         echo "http://localhost:8081"
     fi
+}
+
+# Function to get Mock OAuth2 URL for Keycloak IdP configuration
+# Keycloak always runs in a container, so it always needs the container network name
+get_mock_oauth2_url_for_keycloak() {
+    echo "http://mock-oauth2-server:8080"
 }
 
 # Function to get LDAP Web Manager URL based on environment
@@ -82,6 +94,8 @@ show_environment_info() {
 export -f is_running_in_container
 export -f get_keycloak_url
 export -f get_ldap_url
+export -f get_ldap_url_for_keycloak
 export -f get_mock_oauth2_url
+export -f get_mock_oauth2_url_for_keycloak
 export -f get_ldap_manager_url
 export -f show_environment_info
