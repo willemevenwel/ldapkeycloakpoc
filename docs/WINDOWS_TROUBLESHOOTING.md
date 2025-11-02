@@ -45,7 +45,7 @@ This prevents Git Bash from translating the path while keeping the correct path 
 #### Quick Fix:
 ```bash
 # Run the comprehensive test script with debug mode first
-./test_all.sh your-realm-name --debug
+./test_all_bastion.sh your-realm-name --debug
 
 # This will show:
 # - Platform detection (Windows vs macOS vs Linux)  
@@ -323,7 +323,7 @@ This error occurs when Keycloak tries to sync users/groups from LDAP but the LDA
 **Step 1: Verify LDAP Data Exists**
 ```bash
 # Check if LDAP has any users
-./test_all.sh your-realm-name --debug
+./test_all_bastion.sh your-realm-name --debug
 ```
 
 Look for output like:
@@ -396,7 +396,7 @@ cd keycloak
 **General Solutions:**
 ```bash
 # 1. Verify LDAP data exists
-./test_all.sh your-realm-name --debug
+./test_all_bastion.sh your-realm-name --debug
 
 # 2. If no users/groups found, reimport data
 docker exec python-bastion python python-bastion/csv_to_ldif.py
@@ -415,7 +415,7 @@ If issues persist:
 
 1. Run the enhanced test script with debug mode and save output:
    ```bash
-   ./test_all.sh your-realm-name --debug > debug_output.txt 2>&1
+   ./test_all_bastion.sh your-realm-name --debug > debug_output.txt 2>&1
    ```
 
 2. Check container logs:
