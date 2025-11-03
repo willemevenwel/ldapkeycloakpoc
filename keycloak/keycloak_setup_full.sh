@@ -215,12 +215,58 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     check_success
     echo -e "${GREEN}✅ Mock OAuth2 Identity Provider configured successfully${NC}"
     
+    # Step 9: Configure Application Clients (Automatic with organizations)
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}📱 Application-Specific Client Setup${NC}"
+    echo -e "${YELLOW}   This creates organization-specific clients for each application${NC}"
+    echo -e "${YELLOW}   Pattern: {org}-{app}-client (e.g., acme-app-a-client)${NC}"
+    echo -e "${YELLOW}   Each client has unique credentials and organization-aware tokens${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    echo ""
+    echo -e "${YELLOW}📱 Setting up application clients...${NC}"
+    echo -e "${BLUE}💡 Enter application name (e.g., app-a, app-b, my-service)${NC}"
+    echo -e "${BLUE}   Default application: app-a${NC}"
+    
+    if [ "$CHECK_STEPS" = true ]; then
+        echo -en "${CYAN}Enter application name (or press Enter for default): ${NC}"
+        read -r app_name
+    elif [ "$USE_DEFAULTS" = true ]; then
+        app_name="app-a"
+        echo -e "${CYAN}Enter application name (or press Enter for default): ${YELLOW}[using default: app-a]${NC}"
+    else
+        echo -en "${CYAN}Enter application name (or press Enter for default): ${NC}"
+        read -r app_name
+    fi
+    
+    if [ -z "$app_name" ]; then
+        app_name="app-a"
+        echo -e "${YELLOW}Using default application name: ${app_name}${NC}"
+    else
+        echo -e "${GREEN}Using application name: ${app_name}${NC}"
+    fi
+    
+    echo ""
+    confirm_step "About to create application clients for: ${app_name} across organizations: ${org_prefixes}"
+    echo -e "${GREEN}🔄 Step 9: Configuring application clients...${NC}"
+    echo -e "${BLUE}📋 Using provided organization prefixes: ${org_prefixes}${NC}"
+    ./configure_application_clients.sh "${REALM_NAME}" "${app_name}" ${org_prefixes}
+    check_success
+    echo -e "${GREEN}✅ Application clients configured successfully${NC}"
+    echo ""
+    APP_CLIENTS_CONFIGURED=true
+    APP_NAME="${app_name}"
+    
     echo ""
     echo -e "${GREEN}🎉 Organization setup completed!${NC}"
     echo -e "${YELLOW}📋 Organization Summary:${NC}"
     echo -e "${YELLOW}   • Organizations created: ${org_prefixes}${NC}"
     echo -e "${YELLOW}   • Domain format: {org}.${REALM_NAME}.local${NC}"
     echo -e "${YELLOW}   • Shared clients: shared-web-client, shared-api-client${NC}"
+    if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
+        echo -e "${YELLOW}   • Application clients: {org}-${APP_NAME}-client for each organization${NC}"
+    fi
     echo -e "${YELLOW}   • Role filtering: JWT tokens contain org-specific claims${NC}"
     echo -e "${YELLOW}   • LDAP groups matching org prefixes will sync automatically${NC}"
     echo -e "${YELLOW}   • Mock OAuth2 Identity Provider: Configured for org testing${NC}"
@@ -245,6 +291,9 @@ echo -e "${YELLOW}   • Users and roles synced from LDAP to Keycloak${NC}"
 if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${YELLOW}   • Organizations configured: ${org_prefixes} (domains: {org}.${REALM_NAME}.local)${NC}"
     echo -e "${YELLOW}   • Shared clients with role filtering configured${NC}"
+    if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
+        echo -e "${YELLOW}   • Application clients configured for: ${APP_NAME}${NC}"
+    fi
     echo -e "${YELLOW}   • Mock OAuth2 Identity Provider configured for multi-provider testing${NC}"
 fi
 echo ""
@@ -267,11 +316,21 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${CYAN}🏢 Organization Features Configured:${NC}"
     echo -e "${CYAN}   • JWT tokens contain organization-specific role claims${NC}"
     echo -e "${CYAN}   • Shared clients: shared-web-client, shared-api-client${NC}"
+    if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
+        echo -e "${CYAN}   • Application clients: {org}-${APP_NAME}-client (one per organization)${NC}"
+    fi
     echo -e "${CYAN}   • Role filtering by organization prefix in JWT tokens${NC}"
     echo -e "${CYAN}   • Organization domains: {org}.${REALM_NAME}.local format${NC}"
     echo -e "${CYAN}   • Mock OAuth2 Identity Provider for multi-provider testing${NC}"
     echo -e "${CYAN}   • Organization-specific OAuth2 clients configured${NC}"
     echo -e "${CYAN}   • View organization setup guide: ./organization_setup_guide.sh${NC}"
+    echo ""
+fi
+
+if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
+    echo -e "${CYAN}🧪 Test Application Clients:${NC}"
+    echo -e "${CYAN}   ./test_application_jwt_bastion.sh ${REALM_NAME} ${APP_NAME} acme test-acme-admin${NC}"
+    echo -e "${CYAN}   ./test_application_jwt_bastion.sh --defaults${NC}"
     echo ""
 fi
 

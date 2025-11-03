@@ -161,6 +161,7 @@ ldapkeycloakpoc/
 ├── keycloak/                   # Keycloak management scripts
 │   ├── create_realm.sh         # Create new Keycloak realms
 │   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
+│   ├── configure_application_clients.sh   # Create organization-specific application clients
 │   ├── configure_mock_oauth2_idp.sh       # Configure Mock OAuth2 Identity Provider
 │   ├── configure_shared_clients.sh        # Create organization-aware shared clients
 │   ├── debug_realm_ldap.sh     # Debug realm and LDAP provider status
@@ -196,6 +197,8 @@ ldapkeycloakpoc/
 ├── test_all.sh                 # Internal test script (runs inside container)
 ├── test_jwt_bastion.sh         # 🧪 RECOMMENDED: Container-based JWT testing
 ├── test_jwt.sh                 # Internal JWT test script (runs inside container)
+├── test_application_jwt_bastion.sh  # 🧪 RECOMMENDED: Container-based application JWT testing
+├── test_application_jwt.sh     # Internal application JWT test script
 ├── quick_reference.sh          # Quick reference commands
 ├── network_detect.sh           # Network detection utility for containers/host
 └── README.md                   # This file
@@ -667,6 +670,14 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 - Creates organization-specific OAuth2 clients and mappers
 - Enables multi-provider authentication testing scenarios
 
+**✅ `configure_application_clients.sh <realm-name> <app-name> [org-prefixes...]`** *(Auto-executed after organization setup)*
+- Creates organization-specific application clients
+- Pattern: `{org}-{app}-client` (e.g., `acme-app-a-client`, `xyz-app-a-client`)
+- Each client has unique credentials and organization-aware JWT tokens
+- Protocol mappers include: organization, application, realm roles, email, username
+- Automatically configured when organizations are set up (default: `app-a`)
+- Can be run manually to create additional application clients
+
 ### Debugging & Maintenance
 
 **🔧 `debug_realm_ldap.sh <realm-name>`** *(Manual use only)*
@@ -709,6 +720,12 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 ./keycloak/configure_shared_clients.sh mycompany acme xyz
 ./keycloak/configure_mock_oauth2_idp.sh mycompany acme xyz
 
+# Application-specific client setup (additional apps after initial setup)
+./keycloak/configure_application_clients.sh mycompany app-b acme xyz
+./keycloak/configure_application_clients.sh mycompany app-c acme xyz
+
+# Note: First application (app-a) is automatically created during organization setup
+
 # Debugging and maintenance
 ./keycloak/debug_realm_ldap.sh mycompany
 ./keycloak/keycloak_details.sh
@@ -718,9 +735,9 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 ### Script Organization Summary
 
 - **🤖 Master Script (1):** `keycloak_setup_full.sh` - Complete setup orchestrator called by `start_all_bastion.sh`
-- **⚙️ Component Scripts (8):** Individual Keycloak configuration components executed by master script
+- **⚙️ Component Scripts (9):** Individual Keycloak configuration components executed by master script
 - **🔧 Manual Tools (2):** Troubleshooting and interactive guidance utilities
-- **📁 Total:** 11 focused, functional scripts with clear modular architecture
+- **📁 Total:** 12 focused, functional scripts with clear modular architecture
 
 ## User and Group Management
 
@@ -1238,7 +1255,8 @@ By removing the `.git` directory, the code becomes part of your main repository 
 **🚀 RECOMMENDED: Container-Based Scripts**
 - `start_all_bastion.sh` - Complete LDAP-Keycloak setup (cross-platform)
 - `test_all_bastion.sh` - Comprehensive system testing and verification (cross-platform)  
-- `test_jwt_bastion.sh` - JWT token validation with organization users (cross-platform)
+- `test_jwt_bastion.sh` - JWT token validation with shared clients (cross-platform)
+- `test_application_jwt_bastion.sh` - JWT token validation with application-specific clients (cross-platform)
 - `start.sh` - LDAP-only setup
 - `stop.sh` - Stop all services
 
@@ -1249,6 +1267,7 @@ By removing the `.git` directory, the code becomes part of your main repository 
 - `start_all_bastion_internal.sh` - Internal setup script (runs inside container - users never call directly)
 - `test_all.sh` - Internal test script (can run on host or container - auto-detects environment)
 - `test_jwt.sh` - Internal JWT test script (can run on host or container - auto-detects environment)
+- `test_application_jwt.sh` - Internal application JWT test script (can run on host or container - auto-detects environment)
 - `network_detect.sh` - Network detection utility (sourced by other scripts)
 
 ### Migration Guide
@@ -1380,6 +1399,108 @@ JWT ROLE VERIFICATION
 }
 ```
 
+### Application-Specific JWT Testing
+
+The `test_application_jwt_bastion.sh` script validates organization-specific application clients:
+
+```bash
+# 🚀 RECOMMENDED: Test with defaults (uses app-a, acme organization)
+./test_application_jwt_bastion.sh --defaults
+
+# Test specific application and organization
+./test_application_jwt_bastion.sh capgemini app-a acme test-acme-admin
+./test_application_jwt_bastion.sh capgemini app-b xyz test-xyz-user
+
+# Test multiple users with one application client
+./test_application_jwt_bastion.sh capgemini app-a acme test-acme-admin test-multi-org
+```
+
+**Application Client Testing Features:**
+- 🐳 **Container Execution**: Cross-platform compatibility
+- 🔐 **Automatic Secret Retrieval**: Fetches client secrets from Keycloak API
+- 🏢 **Organization-Specific**: Tests clients like `acme-app-a-client`, `xyz-app-a-client`
+- 📱 **Application Claims**: Validates `application` and `organization` JWT claims
+- 🌐 **Simplified Login URLs**: No need to specify redirect_uri (pre-configured)
+- ✅ **Claim Validation**: Ensures organization and application match expected values
+
+**Pre-configured Redirect URIs:**
+
+Each application client is automatically configured with comprehensive redirect URIs:
+- **Development**: `http://localhost:3000/*`, `http://localhost:8080/*`, `http://localhost:8000/*`
+- **Callback Paths**: `/callback`, `/auth/callback` for each port
+- **Domain-based**: `http://{app}.{org}.{realm}.local/*` and `/callback` variants
+- **HTTPS Variants**: All of the above with HTTPS protocol
+- **Alternative Format**: `http://{org}-{app}.{realm}.local/*`
+
+This means your application can use simpler authorization URLs without specifying `redirect_uri`:
+```
+# Simple - redirect_uri not needed (uses first matching configured URI)
+http://localhost:8090/realms/capgemini/protocol/openid-connect/auth?client_id=acme-app-a-client&response_type=code
+
+# With scope specification
+http://localhost:8090/realms/capgemini/protocol/openid-connect/auth?client_id=acme-app-a-client&response_type=code&scope=openid profile email
+```
+
+**Example Application JWT Test Output:**
+```bash
+🐳 Running application JWT tests inside python-bastion container...
+=========================================
+APPLICATION JWT VERIFICATION
+=========================================
+🎯 Using defaults: realm=capgemini, app=app-a, org=acme, users=[test-acme-admin]
+🔍 Testing Configuration:
+   Realm: capgemini
+   Application: app-a
+   Organization: acme
+   Client ID: acme-app-a-client
+
+🌐 Keycloak URLs:
+   Token Endpoint: http://keycloak:8080/realms/capgemini/protocol/openid-connect/token
+   Account Console: http://keycloak:8080/realms/capgemini/account
+   Authorization URL: http://keycloak:8080/realms/capgemini/protocol/openid-connect/auth?client_id=acme-app-a-client&response_type=code
+   💡 Note: Redirect URIs are pre-configured in client (localhost:3000, 8000, 8080, etc.)
+
+👤 Testing user: test-acme-admin
+✅ Authentication successful
+📋 Decoded JWT payload:
+{
+  "organization": "acme",
+  "application": "app-a",
+  "realm_access": {
+    "roles": ["offline_access", "acme_admin", "uma_authorization"]
+  },
+  "preferred_username": "test-acme-admin",
+  "email": "test-acme-admin@test.local"
+}
+
+✅ Organization claim matches: acme
+✅ Application claim matches: app-a
+```
+
+**When to Use Application Clients vs Shared Clients:**
+
+| Use Case | Client Type | Example |
+|----------|------------|---------|
+| General testing, development | Shared clients | `shared-web-client` |
+| Production App A (ACME users) | Application client | `acme-app-a-client` |
+| Production App A (XYZ users) | Application client | `xyz-app-a-client` |
+| Production App B (ACME users) | Application client | `acme-app-b-client` |
+| API service accounts | Shared API client | `shared-api-client` |
+
+**Setup Application Clients:**
+```bash
+# Application clients are automatically created during organization setup
+./start_all_bastion.sh capgemini --defaults  # Creates app-a clients automatically
+
+# Or manually create additional application clients
+./keycloak/configure_application_clients.sh capgemini app-b acme xyz
+
+# Organization setup automatically:
+# 1. Prompts for application name (default: app-a)
+# 2. Creates {org}-{app}-client for each organization
+# 3. Configures organization/application protocol mappers
+```
+
 ### Cross-Platform Testing Benefits
 
 **Before (Host-Based Testing):**
@@ -1402,11 +1523,17 @@ JWT ROLE VERIFICATION
 # Complete system test (recommended first step)
 ./test_all_bastion.sh mycompany
 
-# JWT test with organization users (most reliable)
+# JWT test with shared client (organization users)
 ./test_jwt_bastion.sh --defaults
+
+# Application client JWT test (organization-specific clients)
+./test_application_jwt_bastion.sh --defaults
 
 # JWT test with specific realm and organization users
 ./test_jwt_bastion.sh mycompany --defaults
+
+# Application client test with specific app and org
+./test_application_jwt_bastion.sh mycompany app-a acme test-acme-admin
 
 # Debug specific user authentication
 ./test_jwt_bastion.sh mycompany test-acme-admin

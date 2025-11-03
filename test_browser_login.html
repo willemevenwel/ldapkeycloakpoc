@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keycloak Application Client Login Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+        }
+        .config-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .logout-btn {
+            background: #f44336;
+        }
+        .logout-btn:hover {
+            background: #da190b;
+        }
+        .info-box {
+            background: #e7f3fe;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .success-box {
+            background: #d4edda;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+        }
+        .token-display {
+            background: #263238;
+            color: #aed581;
+            padding: 20px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .claim-highlight {
+            color: #ffeb3b;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Keycloak Application Client Login Test</h1>
+        
+        <div class="info-box">
+            <strong>ℹ️ Purpose:</strong> This page allows you to test the OAuth2/OIDC login flow with your Keycloak application clients
+            and view the JWT tokens with organization and application claims.
+        </div>
+
+        <div class="config-section">
+            <h2>⚙️ Configuration</h2>
+            
+            <label for="keycloakUrl">Keycloak URL:</label>
+            <input type="text" id="keycloakUrl" value="http://localhost:8090" />
+            
+            <label for="realm">Realm:</label>
+            <input type="text" id="realm" value="capgemini" />
+            
+            <label for="clientId">Client ID:</label>
+            <select id="clientId">
+                <option value="acme-app-a-client">acme-app-a-client (ACME Organization - App A)</option>
+                <option value="xyz-app-a-client">xyz-app-a-client (XYZ Organization - App A)</option>
+                <option value="shared-web-client">shared-web-client (Shared Multi-Org Client)</option>
+            </select>
+            
+            <div class="warning-box">
+                <strong>⚠️ Note:</strong> This is a <strong>public client</strong> example (no client secret required).
+                The redirect URI is pre-configured in Keycloak to <code>http://localhost:3000/*</code>
+            </div>
+        </div>
+
+        <div id="loginSection">
+            <h2>🚀 Step 1: Login</h2>
+            <div class="info-box">
+                <strong>Test Users:</strong><br>
+                • <code>test-acme-admin</code> / <code>test-acme-admin</code> (ACME admin role)<br>
+                • <code>test-acme-user</code> / <code>test-acme-user</code> (ACME user role)<br>
+                • <code>test-xyz-admin</code> / <code>test-xyz-admin</code> (XYZ admin role)<br>
+                • <code>test-multi-org</code> / <code>test-multi-org</code> (Both ACME and XYZ roles)
+            </div>
+            <button onclick="login()">🔑 Login via Keycloak</button>
+        </div>
+
+        <div id="tokenSection" class="hidden">
+            <h2>✅ Step 2: Authentication Successful</h2>
+            <div class="success-box">
+                <strong>✓ Successfully authenticated!</strong> Your access token is displayed below.
+            </div>
+            
+            <button onclick="refreshToken()">🔄 Refresh Token</button>
+            <button onclick="logout()" class="logout-btn">🚪 Logout</button>
+            
+            <h3>📋 Access Token (JWT)</h3>
+            <div class="info-box">
+                Look for these claims in the decoded token below:
+                <ul>
+                    <li><strong>organization</strong>: Organization identifier (acme, xyz)</li>
+                    <li><strong>application</strong>: Application identifier (app-a)</li>
+                    <li><strong>realm_access.roles</strong>: ALL user roles (including other orgs)</li>
+                    <li><strong>preferred_username</strong>: Username</li>
+                    <li><strong>email</strong>: User email</li>
+                </ul>
+            </div>
+            
+            <h4>Raw Token:</h4>
+            <pre id="rawToken"></pre>
+            
+            <h4>Decoded Token:</h4>
+            <div id="decodedToken" class="token-display"></div>
+            
+            <h3>🔑 Token Information</h3>
+            <div id="tokenInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        let tokens = null;
+
+        // Parse URL parameters on page load
+        window.addEventListener('load', () => {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            
+            if (code) {
+                // We received an authorization code, exchange it for tokens
+                exchangeCodeForToken(code);
+            }
+        });
+
+        function login() {
+            const keycloakUrl = document.getElementById('keycloakUrl').value;
+            const realm = document.getElementById('realm').value;
+            const clientId = document.getElementById('clientId').value;
+            
+            // Build authorization URL
+            const redirectUri = window.location.origin + window.location.pathname;
+            const authUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/auth?` +
+                `client_id=${clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `response_type=code&` +
+                `scope=openid profile email`;
+            
+            // Redirect to Keycloak login
+            window.location.href = authUrl;
+        }
+
+        async function exchangeCodeForToken(code) {
+            const keycloakUrl = document.getElementById('keycloakUrl').value;
+            const realm = document.getElementById('realm').value;
+            const clientId = document.getElementById('clientId').value;
+            const redirectUri = window.location.origin + window.location.pathname;
+            
+            try {
+                const response = await fetch(`${keycloakUrl}/realms/${realm}/protocol/openid-connect/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: redirectUri,
+                        client_id: clientId,
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Token exchange failed: ${response.status}`);
+                }
+
+                tokens = await response.json();
+                displayTokens();
+                
+                // Clean up URL (remove code parameter)
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (error) {
+                alert('Error exchanging code for token: ' + error.message);
+                console.error('Token exchange error:', error);
+            }
+        }
+
+        function displayTokens() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('tokenSection').classList.remove('hidden');
+            
+            // Display raw access token
+            document.getElementById('rawToken').textContent = tokens.access_token;
+            
+            // Decode and display JWT
+            const decoded = parseJwt(tokens.access_token);
+            const highlighted = JSON.stringify(decoded, null, 2)
+                .replace(/"organization":/g, '<span class="claim-highlight">"organization":</span>')
+                .replace(/"application":/g, '<span class="claim-highlight">"application":</span>')
+                .replace(/"realm_access":/g, '<span class="claim-highlight">"realm_access":</span>')
+                .replace(/"preferred_username":/g, '<span class="claim-highlight">"preferred_username":</span>');
+            
+            document.getElementById('decodedToken').innerHTML = highlighted;
+            
+            // Display key information
+            const info = `
+                <div class="success-box">
+                    <h4>Key Claims:</h4>
+                    <ul>
+                        <li><strong>Username:</strong> ${decoded.preferred_username || 'N/A'}</li>
+                        <li><strong>Email:</strong> ${decoded.email || 'N/A'}</li>
+                        <li><strong>Organization:</strong> ${decoded.organization || 'N/A'}</li>
+                        <li><strong>Application:</strong> ${decoded.application || 'N/A'}</li>
+                        <li><strong>Client:</strong> ${decoded.azp || 'N/A'}</li>
+                        <li><strong>Realm Roles:</strong> ${decoded.realm_access?.roles?.join(', ') || 'None'}</li>
+                        <li><strong>Token Expires:</strong> ${new Date(decoded.exp * 1000).toLocaleString()}</li>
+                    </ul>
+                </div>
+            `;
+            document.getElementById('tokenInfo').innerHTML = info;
+        }
+
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (error) {
+                console.error('Error parsing JWT:', error);
+                return {};
+            }
+        }
+
+        async function refreshToken() {
+            if (!tokens || !tokens.refresh_token) {
+                alert('No refresh token available');
+                return;
+            }
+
+            const keycloakUrl = document.getElementById('keycloakUrl').value;
+            const realm = document.getElementById('realm').value;
+            const clientId = document.getElementById('clientId').value;
+
+            try {
+                const response = await fetch(`${keycloakUrl}/realms/${realm}/protocol/openid-connect/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'refresh_token',
+                        refresh_token: tokens.refresh_token,
+                        client_id: clientId,
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Token refresh failed: ${response.status}`);
+                }
+
+                tokens = await response.json();
+                displayTokens();
+                alert('✓ Token refreshed successfully!');
+            } catch (error) {
+                alert('Error refreshing token: ' + error.message);
+                console.error('Token refresh error:', error);
+            }
+        }
+
+        async function logout() {
+            const keycloakUrl = document.getElementById('keycloakUrl').value;
+            const realm = document.getElementById('realm').value;
+            const redirectUri = window.location.origin + window.location.pathname;
+
+            // Optional: Call Keycloak logout endpoint
+            if (tokens && tokens.refresh_token) {
+                const clientId = document.getElementById('clientId').value;
+                try {
+                    await fetch(`${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            client_id: clientId,
+                            refresh_token: tokens.refresh_token,
+                        })
+                    });
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            }
+
+            // Clear local state
+            tokens = null;
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('tokenSection').classList.add('hidden');
+            
+            // Redirect to Keycloak logout page
+            window.location.href = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout?redirect_uri=${encodeURIComponent(redirectUri)}`;
+        }
+    </script>
+</body>
+</html>
