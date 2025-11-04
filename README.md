@@ -873,6 +873,36 @@ docker exec ldap-manager php -v
 
 ## Debugging and Troubleshooting
 
+### LDAP Password Format for Keycloak Authentication
+
+**Background:** LDAP passwords imported from CSV files may be stored in SSHA hash format, which can cause authentication failures when Keycloak tries to authenticate users.
+
+**Symptoms:**
+- LDAP users cannot authenticate in Keycloak
+- Test users (like `test-acme-admin`) work fine, but CSV users (like `willem`) fail
+- LDAP bind tests fail with "Invalid credentials (49)"
+
+**Automatic Fix:** The startup script now automatically fixes LDAP password formats when loading additional users:
+```bash
+# This is now handled automatically by load_additional_users.sh
+./ldap/load_additional_users.sh <realm-name>
+```
+
+**Manual Fix (if needed):**
+```bash
+# Fix all LDAP user passwords to cleartext format
+./ldap/fix_ldap_passwords.sh
+
+# Then sync to Keycloak
+./keycloak/sync_ldap.sh <realm-name>
+```
+
+**What it does:**
+- Reads user passwords from `data/users.csv`
+- Updates LDAP `userPassword` attribute to cleartext format
+- Tests each user's authentication via LDAP bind
+- Makes passwords compatible with Keycloak's LDAP authentication
+
 ### Container Status and Logs
 
 ```bash

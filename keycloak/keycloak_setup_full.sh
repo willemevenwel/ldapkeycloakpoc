@@ -271,6 +271,22 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo -e "${YELLOW}   • LDAP groups matching org prefixes will sync automatically${NC}"
     echo -e "${YELLOW}   • Mock OAuth2 Identity Provider: Configured for org testing${NC}"
     echo ""
+    
+    # Step 10: Configure Dashboard Client
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}📊 Dashboard Client Setup${NC}"
+    echo -e "${YELLOW}   This creates a confidential client for the dashboard/token-viewer${NC}"
+    echo -e "${YELLOW}   The dashboard client enables API access to query realms and clients${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    confirm_step "About to create dashboard client for API access in the token viewer"
+    echo -e "${GREEN}🔄 Step 10: Configuring dashboard client...${NC}"
+    ./configure_dashboard_client.sh "${REALM_NAME}"
+    check_success
+    echo -e "${GREEN}✅ Dashboard client configured successfully${NC}"
+    echo ""
+    
     ORGANIZATIONS_CONFIGURED=true
 else
     echo -e "${YELLOW}Skipped organization setup. You can run it manually later with:${NC}"
@@ -294,6 +310,7 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
         echo -e "${YELLOW}   • Application clients configured for: ${APP_NAME}${NC}"
     fi
+    echo -e "${YELLOW}   • Dashboard client configured for token-viewer API access${NC}"
     echo -e "${YELLOW}   • Mock OAuth2 Identity Provider configured for multi-provider testing${NC}"
 fi
 echo ""
@@ -319,6 +336,7 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     if [ "$APP_CLIENTS_CONFIGURED" = true ]; then
         echo -e "${CYAN}   • Application clients: {org}-${APP_NAME}-client (one per organization)${NC}"
     fi
+    echo -e "${CYAN}   • Dashboard client: dashboard-admin-client (for token-viewer)${NC}"
     echo -e "${CYAN}   • Role filtering by organization prefix in JWT tokens${NC}"
     echo -e "${CYAN}   • Organization domains: {org}.${REALM_NAME}.local format${NC}"
     echo -e "${CYAN}   • Mock OAuth2 Identity Provider for multi-provider testing${NC}"

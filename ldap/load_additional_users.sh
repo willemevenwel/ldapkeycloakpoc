@@ -235,6 +235,20 @@ echo "🧹 Cleanup completed"
 # Prompt to run LDAP sync if import was successful
 if [ "$IMPORT_SUCCESS" = true ]; then
     echo ""
+    echo -e "${GREEN}🔧 Fixing LDAP password format for Keycloak compatibility...${NC}"
+    # Run the password fix script to ensure cleartext passwords for Keycloak
+    if [ -f "ldap/fix_ldap_passwords.sh" ]; then
+        ./ldap/fix_ldap_passwords.sh
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ LDAP passwords fixed for Keycloak authentication${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Password fix encountered issues, but continuing...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Password fix script not found at ldap/fix_ldap_passwords.sh${NC}"
+    fi
+    
+    echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}📋 Optional: Sync the new users and roles to Keycloak${NC}"
     echo -e "${YELLOW}   This will synchronize the newly added ${CYAN}LDAP${NC} users and roles with Keycloak${NC}"

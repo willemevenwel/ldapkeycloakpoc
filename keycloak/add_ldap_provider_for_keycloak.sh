@@ -167,7 +167,9 @@ create_ldap_provider() {
         "connectionTrace": ["false"],
         "startTls": ["false"],
         "useKerberosForPasswordAuthentication": ["false"],
-        "removeInvalidUsersEnabled": ["true"]
+        "removeInvalidUsersEnabled": ["true"],
+        "customUserSearchFilter": [""],
+        "searchScope": ["2"]
     }
 }
 EOF
