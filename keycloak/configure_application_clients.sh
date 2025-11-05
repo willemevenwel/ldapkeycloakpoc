@@ -111,6 +111,17 @@ get_organization_id() {
     echo "$ORG_ID"
 }
 
+# NOTE: We explored client-scope-based role filtering but found that:
+# - Keycloak's oidc-usermodel-realm-role-mapper always includes ALL user realm roles
+# - Scope mappings control which roles CAN be granted, but don't filter token contents
+# - Complex filtering would require JavaScript mappers (not recommended in newer Keycloak)
+# 
+# DESIGN DECISION: Use fullScopeAllowed=true with organization claim for client-side filtering
+# - Simpler, more maintainable
+# - Clear security boundary: organization claim identifies context
+# - Client applications filter roles by organization prefix
+# - Still secure: client knows its organization context
+
 # Function to create application client for an organization
 create_organization_app_client() {
     local org_prefix=$1
@@ -213,7 +224,7 @@ EOF
         # Generate and set client secret
         generate_client_secret "$CLIENT_UUID" "$client_id" "$org_prefix"
         
-        # Create protocol mappers
+        # Create protocol mappers (includes realm roles + organization/application metadata)
         create_client_protocol_mappers "$CLIENT_UUID" "$client_id" "$org_prefix"
         
         return 0
@@ -292,7 +303,8 @@ create_client_protocol_mappers() {
     
     echo -e "${YELLOW}🗺️  Creating protocol mappers for ${client_id}...${NC}"
     
-    # 1. Realm Roles Mapper
+    # 1. Realm Roles Mapper - includes ALL user's realm roles
+    # Note: Client applications should filter by organization prefix using the organization claim
     REALM_ROLES_MAPPER=$(cat <<EOF
 {
     "name": "realm-roles",
@@ -314,7 +326,7 @@ EOF
         -H "Content-Type: application/json" \
         -d "${REALM_ROLES_MAPPER}" > /dev/null
     
-    # 2. Organization Claim Mapper
+    # 2. Organization Claim Mapper (hardcoded) - identifies which organization this client belongs to
     ORG_CLAIM_MAPPER=$(cat <<EOF
 {
     "name": "organization",
@@ -337,7 +349,7 @@ EOF
         -H "Content-Type: application/json" \
         -d "${ORG_CLAIM_MAPPER}" > /dev/null
     
-    # 3. Application Claim Mapper
+    # 2. Application Claim Mapper
     APP_CLAIM_MAPPER=$(cat <<EOF
 {
     "name": "application",
@@ -360,7 +372,7 @@ EOF
         -H "Content-Type: application/json" \
         -d "${APP_CLAIM_MAPPER}" > /dev/null
     
-    # 4. Email Mapper
+    # 3. Email Mapper
     EMAIL_MAPPER=$(cat <<EOF
 {
     "name": "email",
@@ -383,7 +395,7 @@ EOF
         -H "Content-Type: application/json" \
         -d "${EMAIL_MAPPER}" > /dev/null
     
-    # 5. Username Mapper
+    # 4. Username Mapper
     USERNAME_MAPPER=$(cat <<EOF
 {
     "name": "username",
@@ -429,12 +441,26 @@ display_summary() {
         echo ""
     done
     
+    echo -e "${GREEN}🔐 Security Model & Design Decision:${NC}"
+    echo -e "   • fullScopeAllowed: ${MAGENTA}true${NC} (All user roles included)"
+    echo -e "   • Role Filtering Approach: ${YELLOW}Client-side via organization claim${NC}"
+    echo -e "   • Rationale: Keycloak's realm role mappers include ALL user roles by design"
+    echo -e "   • Trust Model: Organization claim identifies client's organizational context"
+    echo ""
+    
     echo -e "${GREEN}🗺️  Protocol Mappers Created:${NC}"
-    echo -e "   • realm_access.roles - User's realm roles"
-    echo -e "   • organization - Organization identifier (${ORGANIZATION_PREFIXES[*]})"
-    echo -e "   • application - Application identifier (${APP_NAME})"
+    echo -e "   • realm_access.roles - ${YELLOW}ALL user realm roles (client must filter)${NC}"
+    echo -e "   • organization - ${GREEN}Org identifier (${ORGANIZATION_PREFIXES[*]})${NC} ${CYAN}← Use this to filter!${NC}"
+    echo -e "   • application - Application name (${APP_NAME})"
     echo -e "   • email - User email address"
     echo -e "   • preferred_username - Username"
+    echo ""
+    
+    echo -e "${CYAN}📘 How to Use the Organization Claim:${NC}"
+    echo -e "   ${CYAN}1. Extract 'organization' claim from JWT (e.g., \"acme\")${NC}"
+    echo -e "   ${CYAN}2. Filter realm_access.roles to only include roles starting with that prefix${NC}"
+    echo -e "   ${CYAN}3. Example: If organization=\"acme\", only use roles matching \"acme_*\"${NC}"
+    echo -e "   ${CYAN}4. This prevents cross-organization authorization bypass${NC}"
     echo ""
     
     echo -e "${GREEN}🌐 Keycloak URLs:${NC}"
@@ -475,11 +501,20 @@ display_summary() {
   -d 'client_secret=${first_secret}'${NC}"
     echo ""
     
+    echo -e "${YELLOW}⚠️  Security Consideration:${NC}"
+    echo -e "   ${YELLOW}• JWT tokens contain ALL user roles across all organizations${NC}"
+    echo -e "   ${YELLOW}• Your application MUST filter roles by the organization claim${NC}"
+    echo -e "   ${YELLOW}• Do NOT trust a role unless it matches the organization prefix${NC}"
+    echo -e "   ${YELLOW}• Example: acme-app-a-client should only honor acme_* roles${NC}"
+    echo ""
+    
     echo -e "${CYAN}➡️  Next steps:${NC}"
-    echo -e "${CYAN}   1. Test authentication with organization-specific users${NC}"
-    echo -e "${CYAN}   2. Configure your ${APP_NAME} application to use these clients${NC}"
-    echo -e "${CYAN}   3. Update redirect URIs for your actual application URLs${NC}"
-    echo -e "${CYAN}   4. Use test script: ./test_application_jwt.sh ${REALM} ${APP_NAME} ${ORGANIZATION_PREFIXES[0]}${NC}"
+    echo -e "${CYAN}   1. Test authentication: ./test_application_jwt.sh ${REALM} ${APP_NAME} ${ORGANIZATION_PREFIXES[0]}${NC}"
+    echo -e "${CYAN}   2. Implement role filtering in your application:${NC}"
+    echo -e "${CYAN}      const org = jwt.organization; // e.g., 'acme'${NC}"
+    echo -e "${CYAN}      const orgRoles = jwt.realm_access.roles.filter(r => r.startsWith(org + '_'));${NC}"
+    echo -e "${CYAN}   3. Configure your ${APP_NAME} application to use these clients${NC}"
+    echo -e "${CYAN}   4. Never authorize actions based on roles from other organizations${NC}"
 }
 
 # Main execution

@@ -2,27 +2,36 @@
 
 # Script to create a confidential client for the dashboard to query Keycloak Admin API
 # This client uses client credentials grant to get an admin token
-# Usage: ./configure_dashboard_client.sh [realm-name]
+# 
+# IMPORTANT: The dashboard client MUST be created in the master realm so it can
+# authenticate and query ALL realms. This is required because the dashboard needs
+# to list available realms before the user selects one.
+#
+# Usage: ./configure_dashboard_client.sh
 
 set -e
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8090}"
-REALM_NAME="${1:-master}"
+# Get script directory for network detection
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use realm-specific admin credentials if not master realm
-if [ "$REALM_NAME" = "master" ]; then
-    ADMIN_USER="${ADMIN_USER:-admin}"
-    ADMIN_PASS="${ADMIN_PASS:-admin}"
-    AUTH_REALM="master"
+# Source network detection utility
+if [ -f "${SCRIPT_DIR}/../network_detect.sh" ]; then
+    source "${SCRIPT_DIR}/../network_detect.sh"
+    KEYCLOAK_URL="$(get_keycloak_url)"
 else
-    ADMIN_USER="${ADMIN_USER:-admin-${REALM_NAME}}"
-    ADMIN_PASS="${ADMIN_PASS:-admin-${REALM_NAME}}"
-    AUTH_REALM="$REALM_NAME"
+    # Fallback if network_detect.sh not found
+    KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8090}"
 fi
+
+# Dashboard client MUST be in master realm to query all realms
+REALM_NAME="master"
+ADMIN_USER="${ADMIN_USER:-admin}"
+ADMIN_PASS="${ADMIN_PASS:-admin}"
+AUTH_REALM="master"
 
 echo "=========================================="
 echo "Creating Dashboard Admin Client"
-echo "Realm: $REALM_NAME"
+echo "Realm: $REALM_NAME (master realm required for cross-realm queries)"
 echo "=========================================="
 
 # Get admin token
@@ -53,7 +62,6 @@ CLIENT_JSON=$(cat <<EOF
   "description": "Confidential client for dashboard to query Keycloak Admin API",
   "enabled": true,
   "clientAuthenticatorType": "client-secret",
-  "secret": "dashboard-secret-change-in-production",
   "publicClient": false,
   "serviceAccountsEnabled": true,
   "directAccessGrantsEnabled": false,
@@ -90,6 +98,14 @@ fi
 
 echo "✓ Client created/updated"
 
+# Generate a new secret for the client
+echo ""
+echo "Generating new client secret..."
+curl -s -X POST "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/clients/$CLIENT_UUID/client-secret" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" > /dev/null
+echo "✓ New secret generated"
+
 # Get the service account user
 echo ""
 echo "Getting service account user..."
@@ -108,58 +124,129 @@ echo "✓ Service account user ID: $SERVICE_ACCOUNT_USER"
 echo ""
 echo "Assigning admin roles to service account..."
 
-# Get realm admin roles - check for 'admin' role first
-ADMIN_ROLE=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" | jq -c '.[] | select(.name=="admin")')
-
-if [ -n "$ADMIN_ROLE" ] && [ "$ADMIN_ROLE" != "null" ]; then
-    # Assign admin role
-    curl -s -X POST "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/users/$SERVICE_ACCOUNT_USER/role-mappings/realm" \
+# For master realm, we need to assign master realm admin roles
+# These roles allow querying all realms
+if [ "$REALM_NAME" = "master" ]; then
+    # Get the master realm admin client roles
+    MASTER_ADMIN_CLIENT=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/master/clients" \
       -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "[$ADMIN_ROLE]"
-    echo "✓ Admin role assigned"
-else
-    echo "⚠️  Warning: Could not find admin role, assigning query/view roles instead..."
+      -H "Content-Type: application/json" | jq -r '.[] | select(.clientId=="master-realm") | .id')
     
-    # Fallback: assign query/view roles that exist in the realm
-    QUERY_REALMS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="query-realms")')
-    QUERY_CLIENTS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="query-clients")')
-    QUERY_USERS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="query-users")')
-    VIEW_USERS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="view-users")')
-    VIEW_CLIENTS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="view-clients")')
-    VIEW_REALM=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/roles" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" | jq -c '.[] | select(.name=="view-realm")')
-    
-    ROLES_JSON="["
-    [ -n "$QUERY_REALMS" ] && [ "$QUERY_REALMS" != "null" ] && ROLES_JSON="${ROLES_JSON}${QUERY_REALMS},"
-    [ -n "$QUERY_CLIENTS" ] && [ "$QUERY_CLIENTS" != "null" ] && ROLES_JSON="${ROLES_JSON}${QUERY_CLIENTS},"
-    [ -n "$QUERY_USERS" ] && [ "$QUERY_USERS" != "null" ] && ROLES_JSON="${ROLES_JSON}${QUERY_USERS},"
-    [ -n "$VIEW_USERS" ] && [ "$VIEW_USERS" != "null" ] && ROLES_JSON="${ROLES_JSON}${VIEW_USERS},"
-    [ -n "$VIEW_CLIENTS" ] && [ "$VIEW_CLIENTS" != "null" ] && ROLES_JSON="${ROLES_JSON}${VIEW_CLIENTS},"
-    [ -n "$VIEW_REALM" ] && [ "$VIEW_REALM" != "null" ] && ROLES_JSON="${ROLES_JSON}${VIEW_REALM},"
-    ROLES_JSON="${ROLES_JSON%,}]"
-    
-    if [ "$ROLES_JSON" != "[]" ]; then
-        curl -s -X POST "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/users/$SERVICE_ACCOUNT_USER/role-mappings/realm" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$ROLES_JSON"
-        echo "✓ Query/view roles assigned"
+    if [ -z "$MASTER_ADMIN_CLIENT" ] || [ "$MASTER_ADMIN_CLIENT" = "null" ]; then
+        echo "⚠️  Warning: Could not find master-realm client"
+        echo "    Dashboard client may not have sufficient permissions for cross-realm queries"
     else
-        echo "⚠️  Warning: No suitable roles found to assign"
+        echo "✓ Found master-realm client: $MASTER_ADMIN_CLIENT"
+        
+        # Get available client roles from master-realm
+        echo "  Getting available master-realm roles..."
+        AVAILABLE_ROLES=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/master/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$MASTER_ADMIN_CLIENT/available" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" \
+          -H "Content-Type: application/json")
+        
+        # For cross-realm access, we need these key roles
+        ROLES_TO_ASSIGN=$(echo "$AVAILABLE_ROLES" | jq -c '[.[] | select(.name | IN("view-realm", "view-users", "view-clients", "query-realms", "query-clients", "query-users"))]')
+        
+        ROLE_COUNT=$(echo "$ROLES_TO_ASSIGN" | jq 'length')
+        
+        if [ "$ROLE_COUNT" -gt 0 ]; then
+            # Assign the master-realm client roles
+            curl -s -X POST "$KEYCLOAK_URL/admin/realms/master/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$MASTER_ADMIN_CLIENT" \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$ROLES_TO_ASSIGN"
+            echo "✓ Assigned $ROLE_COUNT master-realm roles to service account"
+            echo "  Roles: $(echo "$ROLES_TO_ASSIGN" | jq -r '[.[].name] | join(", ")')"
+            echo "  ℹ️  These roles allow querying ALL realms in Keycloak"
+        else
+            echo "⚠️  Warning: No suitable master-realm roles found"
+            echo "    The service account may already have all necessary roles"
+        fi
+    fi
+else
+    # For non-master realms, use realm-management client
+    REALM_MGMT_CLIENT=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/clients" \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" | jq -r '.[] | select(.clientId=="realm-management") | .id')
+    
+    if [ -z "$REALM_MGMT_CLIENT" ] || [ "$REALM_MGMT_CLIENT" = "null" ]; then
+        echo "⚠️  Warning: Could not find realm-management client"
+        echo "    Dashboard client may not have sufficient permissions for admin API"
+    else
+        echo "✓ Found realm-management client: $REALM_MGMT_CLIENT"
+        
+        # Get available client roles from realm-management
+        echo "  Getting available realm-management roles..."
+        AVAILABLE_ROLES=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$REALM_MGMT_CLIENT/available" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" \
+          -H "Content-Type: application/json")
+        
+        # Extract key admin roles we need
+        ROLES_TO_ASSIGN=$(echo "$AVAILABLE_ROLES" | jq -c '[.[] | select(.name | IN("view-realm", "view-users", "view-clients", "query-realms", "query-clients", "query-users", "manage-clients", "manage-users"))]')
+        
+        ROLE_COUNT=$(echo "$ROLES_TO_ASSIGN" | jq 'length')
+        
+        if [ "$ROLE_COUNT" -gt 0 ]; then
+            # Assign the realm-management client roles
+            curl -s -X POST "$KEYCLOAK_URL/admin/realms/${REALM_NAME}/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$REALM_MGMT_CLIENT" \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$ROLES_TO_ASSIGN"
+            echo "✓ Assigned $ROLE_COUNT realm-management roles to service account"
+            echo "  Roles: $(echo "$ROLES_TO_ASSIGN" | jq -r '[.[].name] | join(", ")')"
+        else
+            echo "⚠️  Warning: No suitable realm-management roles found"
+            echo "    The service account may already have all necessary roles"
+        fi
+    fi
+fi
+
+# For master realm clients, also assign permissions to query other realms
+if [ "$REALM_NAME" = "master" ]; then
+    echo ""
+    echo "🔍 Assigning permissions for non-master realms..."
+    
+    # Get list of all realms
+    ALL_REALMS=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms" \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" | jq -r '.[] | select(.realm != "master") | .realm')
+    
+    if [ -n "$ALL_REALMS" ]; then
+        for OTHER_REALM in $ALL_REALMS; do
+            echo "  📋 Configuring access to realm: $OTHER_REALM"
+            
+            # Get the {realm}-realm client for this specific realm
+            REALM_CLIENT=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/master/clients" \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" | jq -r ".[] | select(.clientId==\"${OTHER_REALM}-realm\") | .id")
+            
+            if [ -n "$REALM_CLIENT" ] && [ "$REALM_CLIENT" != "null" ]; then
+                # Get available roles for this realm client
+                REALM_AVAILABLE_ROLES=$(curl -s -X GET "$KEYCLOAK_URL/admin/realms/master/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$REALM_CLIENT/available" \
+                  -H "Authorization: Bearer $ADMIN_TOKEN" \
+                  -H "Content-Type: application/json")
+                
+                # Assign view/query roles for this realm
+                REALM_ROLES=$(echo "$REALM_AVAILABLE_ROLES" | jq -c '[.[] | select(.name | IN("view-realm", "view-users", "view-clients", "query-realms", "query-clients", "query-users"))]')
+                
+                REALM_ROLE_COUNT=$(echo "$REALM_ROLES" | jq 'length')
+                
+                if [ "$REALM_ROLE_COUNT" -gt 0 ]; then
+                    curl -s -X POST "$KEYCLOAK_URL/admin/realms/master/users/$SERVICE_ACCOUNT_USER/role-mappings/clients/$REALM_CLIENT" \
+                      -H "Authorization: Bearer $ADMIN_TOKEN" \
+                      -H "Content-Type: application/json" \
+                      -d "$REALM_ROLES" > /dev/null
+                    echo "     ✓ Assigned $REALM_ROLE_COUNT roles for realm: $OTHER_REALM"
+                else
+                    echo "     ⚠️  No roles available for realm: $OTHER_REALM (may already be assigned)"
+                fi
+            else
+                echo "     ⚠️  Client ${OTHER_REALM}-realm not found"
+            fi
+        done
+        echo "  ✅ Cross-realm permissions configured"
+    else
+        echo "  ℹ️  No other realms found (only master realm exists)"
     fi
 fi
 

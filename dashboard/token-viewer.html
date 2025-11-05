@@ -528,8 +528,11 @@
 
             errorDiv.classList.add('hidden');
             
+            // Dashboard client MUST be in master realm to query all realms
+            const dashboardRealm = 'master';
+            
             try {
-                const response = await fetch(`${keycloakUrl}/realms/master/protocol/openid-connect/token`, {
+                const response = await fetch(`${keycloakUrl}/realms/${dashboardRealm}/protocol/openid-connect/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -683,13 +686,14 @@
             // Re-authenticate using client credentials
             const keycloakUrl = document.getElementById('keycloakUrl').value;
             const clientSecret = document.getElementById('clientSecret').value;
+            const dashboardRealm = 'master'; // Dashboard client MUST be in master realm to query all realms
             
             if (!clientSecret) {
                 throw new Error('No client secret available. Please authenticate first.');
             }
             
             try {
-                const response = await fetch(`${keycloakUrl}/realms/master/protocol/openid-connect/token`, {
+                const response = await fetch(`${keycloakUrl}/realms/${dashboardRealm}/protocol/openid-connect/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
