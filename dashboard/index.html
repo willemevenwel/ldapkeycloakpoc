@@ -96,6 +96,9 @@
         .keycloak { --accent-color: #9b59b6; }
         .atlas { --accent-color: #2ecc71; }
         .dashboard { --accent-color: #f39c12; }
+        .python { --accent-color: #3776ab; }
+        .oauth2 { --accent-color: #e67e22; }
+        .token-viewer { --accent-color: #8e44ad; }
 
         .service-header {
             display: flex;
@@ -124,8 +127,27 @@
 
         .service-description {
             color: #666;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             line-height: 1.5;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: var(--accent-color);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .service-meta {
+            color: #999;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            font-style: italic;
         }
 
         .service-link {
@@ -229,6 +251,150 @@
         </div>
 
         <div class="services">
+            <!-- Dashboard Info -->
+            <div class="service-card dashboard">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">📊</div>
+                    <div class="service-name">POC Dashboard</div>
+                </div>
+                <span class="version-badge">Nginx Alpine • Latest</span>
+                <div class="service-meta">Container: poc-dashboard | Image: nginx:alpine</div>
+                <div class="service-description">
+                    Lightweight static dashboard providing centralized access to all services with credentials reference. Includes reverse proxy for CORS-free API access.
+                </div>
+                <a href="http://localhost:8888" class="service-link" target="_blank">
+                    🌐 Reload Dashboard
+                </a>
+                <div class="credentials">
+                    <h4>Service Information</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Port:</span>
+                        <span class="credential-value">8888</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Source File:</span>
+                        <span class="credential-value">./dashboard/index.html</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Proxy Path:</span>
+                        <span class="credential-value">/keycloak/ → http://keycloak:8080/</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Purpose:</span>
+                        <span class="credential-value">Service aggregation & CORS proxy</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Viewer Tool -->
+            <div class="service-card token-viewer">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">🎫</div>
+                    <div class="service-name">JWT Token Viewer</div>
+                </div>
+                <span class="version-badge">Interactive Tool • Built-in</span>
+                <div class="service-meta">Static HTML tool | Path: ./dashboard/token-viewer.html</div>
+                <div class="service-description">
+                    Interactive JWT token viewer with Direct Access Grants flow. Login with Keycloak users and view decoded JWT tokens with tree visualization, organization/application claims.
+                </div>
+                <a href="token-viewer.html" class="service-link">
+                    🔐 Open Token Viewer
+                </a>
+                <div class="credentials">
+                    <h4>Features</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Flow Type:</span>
+                        <span class="credential-value">Direct Access Grants (Password)</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Test Users:</span>
+                        <span class="credential-value">test-acme-admin, willem, louis, etc.</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">View Claims:</span>
+                        <span class="credential-value">organization, application, roles</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Display:</span>
+                        <span class="credential-value">Tree view with syntax highlighting</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weave Scope Network Monitor -->
+            <div class="service-card atlas">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">🔍</div>
+                    <div class="service-name">Weave Scope</div>
+                </div>
+                <span class="version-badge">Weave Scope • Latest</span>
+                <div class="service-meta">Container: weave-scope | Image: weaveworks/scope:latest</div>
+                <div class="service-description">
+                    Real-time network topology visualization. Interactive container and network monitoring with live Docker metrics and process inspection.
+                </div>
+                <a href="http://localhost:4040" class="service-link" target="_blank">
+                    🌐 Open Weave Scope Dashboard
+                </a>
+                <div class="credentials">
+                    <h4>Service Information</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Access:</span>
+                        <span class="credential-value">No authentication required</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Port:</span>
+                        <span class="credential-value">4040</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Features:</span>
+                        <span class="credential-value">Live topology, Container stats, Process tree</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Mode:</span>
+                        <span class="credential-value">Privileged with Docker socket access</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keycloak Service -->
+            <div class="service-card keycloak">
+                <div class="status-indicator"></div>
+                <div class="service-header">
+                    <div class="service-icon">KC</div>
+                    <div class="service-name">Keycloak IAM</div>
+                </div>
+                <span class="version-badge">Keycloak 26.0+ • Organizations Enabled</span>
+                <div class="service-meta">Container: keycloak | Image: quay.io/keycloak/keycloak:latest</div>
+                <div class="service-description">
+                    Identity and Access Management platform with Organizations feature. Handles authentication, authorization, SSO, and LDAP federation.
+                </div>
+                <a href="http://localhost:8090" class="service-link" target="_blank">
+                    🌐 Open Keycloak Console
+                </a>
+                <div class="credentials">
+                    <h4>Default Credentials</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Master Admin:</span>
+                        <span class="credential-value">admin / admin</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Realm Admin:</span>
+                        <span class="credential-value">admin-{realm} / admin-{realm}</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Base URL:</span>
+                        <span class="credential-value">http://localhost:8090</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Features:</span>
+                        <span class="credential-value">Organizations, LDAP Federation</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- LDAP Service -->
             <div class="service-card ldap">
                 <div class="status-indicator"></div>
@@ -236,8 +402,10 @@
                     <div class="service-icon">LD</div>
                     <div class="service-name">LDAP Directory</div>
                 </div>
+                <span class="version-badge">MinIO OpenLDAP • Latest</span>
+                <div class="service-meta">Container: ldap | Image: quay.io/minio/openldap:latest</div>
                 <div class="service-description">
-                    OpenLDAP directory service for user and group management. Primary authentication source.
+                    OpenLDAP directory service for user and group management. Primary authentication source with LDIF data import.
                 </div>
                 <a href="http://localhost:8080" class="service-link" target="_blank">
                     🌐 Open LDAP Web Manager
@@ -260,78 +428,57 @@
                         <span class="credential-label">Protocol:</span>
                         <span class="credential-value">ldap://localhost:389</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Keycloak Service -->
-            <div class="service-card keycloak">
-                <div class="status-indicator"></div>
-                <div class="service-header">
-                    <div class="service-icon">KC</div>
-                    <div class="service-name">Keycloak IAM</div>
-                </div>
-                <div class="service-description">
-                    Identity and Access Management platform. Handles authentication, authorization, and SSO.
-                </div>
-                <a href="http://localhost:8090" class="service-link" target="_blank">
-                    🌐 Open Keycloak Console
-                </a>
-                <div class="credentials">
-                    <h4>Default Credentials</h4>
                     <div class="credential-item">
-                        <span class="credential-label">Master Admin:</span>
-                        <span class="credential-value">admin / admin</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">Realm Admin:</span>
-                        <span class="credential-value">admin-{realm} / admin-{realm}</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">Base URL:</span>
-                        <span class="credential-value">http://localhost:8090</span>
+                        <span class="credential-label">Base DN:</span>
+                        <span class="credential-value">dc=min,dc=io</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Atlas Network Monitor -->
-            <div class="service-card atlas">
+            <!-- Python Bastion Utilities -->
+            <div class="service-card python">
                 <div class="status-indicator"></div>
                 <div class="service-header">
-                    <div class="service-icon">AT</div>
-                    <div class="service-name">Weave Scope</div>
+                    <div class="service-icon">�</div>
+                    <div class="service-name">Python Bastion</div>
                 </div>
+                <span class="version-badge">Python 3.11 • Docker CLI 24.0.7</span>
+                <div class="service-meta">Container: python-bastion | Image: python-bastion:latest</div>
                 <div class="service-description">
-                    Real-time network topology visualization. Interactive container and network monitoring with live updates.
+                    Utility container for cross-platform script execution. Pre-configured with curl, jq, ldap-utils, Docker CLI, and Python tools for automation.
                 </div>
-                <a href="http://localhost:4040" class="service-link" target="_blank">
-                    🌐 Open Weave Scope Dashboard
-                </a>
                 <div class="credentials">
                     <h4>Service Information</h4>
                     <div class="credential-item">
-                        <span class="credential-label">Access:</span>
-                        <span class="credential-value">No authentication required</span>
+                        <span class="credential-label">Access Method:</span>
+                        <span class="credential-value">docker exec python-bastion bash</span>
                     </div>
                     <div class="credential-item">
-                        <span class="credential-label">Port:</span>
-                        <span class="credential-value">4040</span>
+                        <span class="credential-label">Purpose:</span>
+                        <span class="credential-value">CSV to LDIF conversion, automation</span>
                     </div>
                     <div class="credential-item">
-                        <span class="credential-label">Features:</span>
-                        <span class="credential-value">Real-time topology, Container monitoring</span>
+                        <span class="credential-label">Installed Tools:</span>
+                        <span class="credential-value">Python 3.11, curl, jq, ldap-utils, docker</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Working Directory:</span>
+                        <span class="credential-value">/workspace (mapped to project root)</span>
                     </div>
                 </div>
             </div>
 
             <!-- Mock OAuth2 Server -->
-            <div class="service-card" style="--accent-color: #e67e22;">
+            <div class="service-card oauth2">
                 <div class="status-indicator"></div>
                 <div class="service-header">
-                    <div class="service-icon">O2</div>
+                    <div class="service-icon">🔐</div>
                     <div class="service-name">Mock OAuth2</div>
                 </div>
+                <span class="version-badge">NAV Mock OAuth2 Server v0.5.0</span>
+                <div class="service-meta">Container: mock-oauth2-server | Image: ghcr.io/navikt/mock-oauth2-server:0.5.0</div>
                 <div class="service-description">
-                    OAuth2/OIDC testing server for integration development. Test authentication flows without external dependencies.
+                    OAuth2/OIDC testing server for integration development. Test authentication flows, token generation, and external identity provider scenarios without dependencies.
                 </div>
                 <a href="http://localhost:8081" class="service-link" target="_blank">
                     🌐 Open OAuth2 Server
@@ -350,65 +497,9 @@
                         <span class="credential-label">Default Issuer:</span>
                         <span class="credential-value">default</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Dashboard Info -->
-            <div class="service-card dashboard">
-                <div class="status-indicator"></div>
-                <div class="service-header">
-                    <div class="service-icon">DB</div>
-                    <div class="service-name">This Dashboard</div>
-                </div>
-                <div class="service-description">
-                    Lightweight static dashboard providing centralized access to all services with credentials reference.
-                </div>
-                <a href="http://localhost:8888" class="service-link" target="_blank">
-                    🌐 Reload Dashboard
-                </a>
-                <div class="credentials">
-                    <h4>Service Information</h4>
                     <div class="credential-item">
-                        <span class="credential-label">Container:</span>
-                        <span class="credential-value">nginx:alpine</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">Port:</span>
-                        <span class="credential-value">8888</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">File:</span>
-                        <span class="credential-value">./dashboard/index.html</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Token Viewer Tool -->
-            <div class="service-card" style="--accent-color: #8e44ad;">
-                <div class="status-indicator"></div>
-                <div class="service-header">
-                    <div class="service-icon">🎫</div>
-                    <div class="service-name">JWT Token Viewer</div>
-                </div>
-                <div class="service-description">
-                    Interactive OAuth2/OIDC login flow tester. Login with Keycloak and view decoded JWT tokens with organization and application claims.
-                </div>
-                <a href="token-viewer.html" class="service-link">
-                    🔐 Open Token Viewer
-                </a>
-                <div class="credentials">
-                    <h4>Features</h4>
-                    <div class="credential-item">
-                        <span class="credential-label">Flow Type:</span>
-                        <span class="credential-value">Authorization Code Flow</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">Test Users:</span>
-                        <span class="credential-value">test-acme-admin, test-xyz-admin, etc.</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="credential-label">View Claims:</span>
-                        <span class="credential-value">organization, application, roles</span>
+                        <span class="credential-label">Purpose:</span>
+                        <span class="credential-value">External IdP testing with Keycloak</span>
                     </div>
                 </div>
             </div>
