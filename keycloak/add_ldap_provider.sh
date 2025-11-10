@@ -25,14 +25,77 @@ fi
 # Keycloak LDAP Configuration Script
 # This script configures an LDAP user federation provider in Keycloak
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak LDAP Provider Configuration Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [options]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Configures an LDAP user federation provider in Keycloak"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name    Name of the realm to configure LDAP for"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help    Show this help message"
+    echo -e "  --force       Replace existing LDAP provider"
+    echo -e "  --skip        Skip if LDAP provider already exists"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart"
+    echo -e "  $0 acme --force"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Keycloak realm must exist (run create_realm.sh first)"
+    echo -e "  - LDAP server must be running and accessible"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  ./update_role_mapper.sh <realm-name>"
+    echo -e "  ./sync_ldap.sh <realm-name>"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name>"
-    echo "Example: $0 wallmart"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage: $0 <realm-name> [options]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     exit 1
 fi
 
 REALM="$1"
+shift  # Remove realm name from arguments
+
+# Parse options
+FORCE_MODE=false
+SKIP_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force)
+            FORCE_MODE=true
+            shift
+            ;;
+        --skip)
+            SKIP_MODE=true
+            shift
+            ;;
+        *)
+            echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
+            shift
+            ;;
+    esac
+done
+
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
@@ -102,10 +165,29 @@ check_ldap_exists() {
     
     if [ -n "$EXISTING_LDAP" ] && [ "$EXISTING_LDAP" != "null" ]; then
         echo -e "${YELLOW}⚠️  ${CYAN}LDAP${NC} provider already exists (ID: ${EXISTING_LDAP})${NC}"
-        echo -e "${YELLOW}🔄 Removing existing provider...${NC}"
-        curl -s -X DELETE "${KEYCLOAK_URL}/admin/realms/${REALM}/components/${EXISTING_LDAP}" \
-            -H "Authorization: Bearer ${TOKEN}"
-        echo -e "${GREEN}✅ Removed existing ${CYAN}LDAP${NC} provider${NC}"
+        
+        # Handle based on mode
+        if [ "$SKIP_MODE" = true ]; then
+            echo -e "${BLUE}ℹ️  Skip mode enabled - keeping existing LDAP provider${NC}"
+            LDAP_ID="$EXISTING_LDAP"
+            LDAP_EXISTS=true
+            return
+        elif [ "$FORCE_MODE" = true ]; then
+            echo -e "${YELLOW}🔄 Force mode enabled - removing existing provider...${NC}"
+            curl -s -X DELETE "${KEYCLOAK_URL}/admin/realms/${REALM}/components/${EXISTING_LDAP}" \
+                -H "Authorization: Bearer ${TOKEN}"
+            echo -e "${GREEN}✅ Removed existing ${CYAN}LDAP${NC} provider${NC}"
+            LDAP_EXISTS=false
+        else
+            # Interactive mode
+            echo -e "${YELLOW}🔄 Removing existing provider...${NC}"
+            curl -s -X DELETE "${KEYCLOAK_URL}/admin/realms/${REALM}/components/${EXISTING_LDAP}" \
+                -H "Authorization: Bearer ${TOKEN}"
+            echo -e "${GREEN}✅ Removed existing ${CYAN}LDAP${NC} provider${NC}"
+            LDAP_EXISTS=false
+        fi
+    else
+        LDAP_EXISTS=false
     fi
 }
 
@@ -288,7 +370,12 @@ wait_for_keycloak
 get_admin_token
 get_realm_id
 check_ldap_exists
-create_ldap_provider
+
+# Only create if LDAP doesn't exist (or was removed)
+if [ "$LDAP_EXISTS" != true ]; then
+    create_ldap_provider
+fi
+
 verify_ldap_provider
 
 echo -e "${GREEN}🎉 ${MAGENTA}Keycloak${NC} ${CYAN}LDAP${NC} configuration completed successfully!${NC}"

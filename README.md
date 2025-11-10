@@ -116,6 +116,7 @@ This POC follows OAuth2/OpenID Connect security best practices:
 - [Prerequisites](#prerequisites)
 - [Container-Based Architecture](#container-based-architecture)
 - [Quick Start](#quick-start)
+- [Quick Reference Guides](#quick-reference-guides) 📚
 - [Security & Production Considerations](#-security--production-considerations)
 - [Keycloak Integration](#keycloak-integration)
 - [Admin-Only Startup](#admin-only-startup)
@@ -130,6 +131,67 @@ This POC follows OAuth2/OpenID Connect security best practices:
 - [CSV File Structure and Influence](#csv-file-structure-and-influence)
 - [Development Notes](#development-notes)
 - [Attribution and Credits](#attribution-and-credits)
+
+## Quick Reference Guides
+
+This project includes interactive quick reference guides for each major component. These guides provide comprehensive command references, common patterns, and troubleshooting tips.
+
+### Available Guides
+
+| Component | Script | Contents |
+|-----------|--------|----------|
+| **Keycloak** | `./keycloak/quick_reference.sh` | Keycloak configuration patterns, automation flags, common use cases |
+| **LDAP** | `./ldap/quick_reference.sh` | LDAP commands, CSV management, password operations, troubleshooting |
+| **Python Bastion** | `./python-bastion/quick_reference.sh` | Container operations, CSV conversion, network detection, utilities |
+
+### Quick Access
+
+```bash
+# View Keycloak quick reference
+./keycloak/quick_reference.sh
+
+# View LDAP quick reference
+./ldap/quick_reference.sh
+
+# View Python Bastion quick reference
+./python-bastion/quick_reference.sh
+
+# Or access from help
+./start_all_bastion.sh --help  # Shows all quick reference locations
+```
+
+### What's Included
+
+**Keycloak Quick Reference:**
+- Common realm setup patterns (minimal, full with orgs)
+- Script automation flags (`--help`, `--force`, `--skip`, `--update`, `--dry-run`)
+- Workflow examples (create, update, sync)
+- Version checking and feature availability
+- Integration patterns and best practices
+
+**LDAP Quick Reference:**
+- LDAP search commands (users, groups, authentication)
+- CSV data management and format
+- Password operations and fixes
+- Container operations and debugging
+- Integration with Keycloak
+- Web UI management tips
+
+**Python Bastion Quick Reference:**
+- Container access and execution
+- CSV to LDIF conversion
+- Running scripts inside container
+- Network detection and URL handling
+- Development workflow
+- File operations and troubleshooting
+
+### When to Use Quick References
+
+- **Learning the system**: Start with quick references to understand available commands
+- **Common tasks**: Quick lookup for frequently used operations
+- **Troubleshooting**: Step-by-step debugging procedures
+- **Automation**: Examples for CI/CD and scripting
+- **Best practices**: Recommended patterns and workflows
 
 ## Features
 
@@ -160,14 +222,14 @@ ldapkeycloakpoc/
 │   └── csv_to_ldif.py          # CSV to LDIF conversion script
 ├── keycloak/                   # Keycloak management scripts
 │   ├── create_realm.sh         # Create new Keycloak realms
-│   ├── add_ldap_provider_for_keycloak.sh  # Configure LDAP user federation
+│   ├── add_ldap_provider.sh    # Configure LDAP user federation
 │   ├── configure_application_clients.sh   # Create organization-specific application clients
 │   ├── configure_mock_oauth2_idp.sh       # Configure Mock OAuth2 Identity Provider
 │   ├── configure_shared_clients.sh        # Create organization-aware shared clients
 │   ├── debug_realm_ldap.sh     # Debug realm and LDAP provider status
-│   ├── keycloak_details.sh     # Show Keycloak server status and configuration
-│   ├── keycloak_setup_full.sh  # Complete Keycloak setup (realm, LDAP, organizations)
-│   ├── organization_setup_guide.sh        # Interactive guide for organization features
+│   ├── show_keycloak_details.sh     # Show Keycloak server status and configuration
+│   ├── setup_keycloak_full.sh  # Complete Keycloak setup (realm, LDAP, organizations)
+│   ├── show_organization_guide.sh        # Interactive guide for organization features
 │   ├── setup_organizations.sh  # Configure organizations with domain mapping
 │   ├── sync_ldap.sh            # Synchronize LDAP users and roles with Keycloak
 │   └── update_role_mapper.sh   # Update LDAP role mapper configuration
@@ -241,7 +303,7 @@ Container (python-bastion):
 ├── start_all_bastion_internal.sh    # 🚀 Complete setup orchestrator
 ├── test_all.sh                      # 🧪 Comprehensive testing suite
 ├── test_jwt.sh                      # 🧪 JWT token validation
-└── keycloak/keycloak_setup_full.sh   # 🔧 Keycloak configuration master
+└── keycloak/setup_keycloak_full.sh   # 🔧 Keycloak configuration master
 ```
 
 **Wrapper Script Pattern:**
@@ -414,7 +476,7 @@ This creates:
 #### Manual Step-by-Step Setup
 ```bash
 # 1. Add LDAP provider to a realm
-./keycloak/add_ldap_provider_for_keycloak.sh company
+./keycloak/add_ldap_provider.sh company
 
 # 2. Create role mapper for LDAP groups → Keycloak roles
 ./keycloak/update_role_mapper.sh company
@@ -632,40 +694,40 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 
 ### Core Setup Scripts
 
-**✅ `keycloak_setup_full.sh <realm-name> [--check-steps] [--defaults]`** *(Master setup script - Auto-executed)*
+**✅ `setup_keycloak_full.sh <realm-name> [--check-steps] [--defaults]`** *(Master setup script - Auto-executed)*
 - Complete Keycloak setup orchestrator called by `start_all_bastion.sh`
 - Executes all realm creation, LDAP integration, and organization setup
 - Supports interactive (`--check-steps`) and automated (`--defaults`) modes
 - Consolidates all Keycloak configuration into a single modular script
 
-**✅ `create_realm.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+**✅ `create_realm.sh <realm-name>`** *(Auto-executed via setup_keycloak_full)*
 - Creates a new Keycloak realm with basic configuration
 - Sets up realm-specific admin user and role mappings
 - Configures default client scopes and protocol mappers
 
-**✅ `add_ldap_provider_for_keycloak.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+**✅ `add_ldap_provider.sh <realm-name>`** *(Auto-executed via setup_keycloak_full)*
 - Configures LDAP user federation provider in the specified realm
 - Sets up connection parameters, search bases, and authentication
 - Creates role and group mappers for LDAP synchronization
 
-**✅ `sync_ldap.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+**✅ `sync_ldap.sh <realm-name>`** *(Auto-executed via setup_keycloak_full)*
 - Synchronizes users and roles from LDAP to Keycloak
 - Triggers full user import and role mapping updates
 - Provides detailed status reporting and error handling
 
 ### Organization & Advanced Features
 
-**✅ `setup_organizations.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+**✅ `setup_organizations.sh <realm-name> [org-prefixes...]`** *(Auto-executed via setup_keycloak_full)*
 - Configures Keycloak Organizations feature (requires Keycloak 26+)
 - Creates organizations with domain mapping (e.g., `acme.realm.local`)
 - Sets up organization-specific role filtering and management
 
-**✅ `configure_shared_clients.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+**✅ `configure_shared_clients.sh <realm-name> [org-prefixes...]`** *(Auto-executed via setup_keycloak_full)*
 - Creates shared clients with organization-aware role filtering
 - Configures protocol mappers for organization detection in JWT tokens
 - Sets up client scopes for multi-organization support
 
-**✅ `configure_mock_oauth2_idp.sh <realm-name> [org-prefixes...]`** *(Auto-executed via keycloak_setup_full)*
+**✅ `configure_mock_oauth2_idp.sh <realm-name> [org-prefixes...]`** *(Auto-executed via setup_keycloak_full)*
 - Configures Mock OAuth2 server as external Identity Provider
 - Creates organization-specific OAuth2 clients and mappers
 - Enables multi-provider authentication testing scenarios
@@ -685,19 +747,19 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 - Tests basic connectivity and displays provider information
 - Useful for manual troubleshooting (not called by automated scripts)
 
-**✅ `keycloak_details.sh`** *(Auto-executed via keycloak_setup_full for status checks)*
+**✅ `show_keycloak_details.sh`** *(Auto-executed via setup_keycloak_full for status checks)*
 - Shows Keycloak server status, version, and configuration
 - Lists all realms and their basic properties
 - Displays enabled features and extension information
 
-**🔧 `organization_setup_guide.sh`** *(Interactive guide only)*
+**🔧 `show_organization_guide.sh`** *(Interactive guide only)*
 - Displays organization setup concepts and step-by-step instructions
 - Educational resource for understanding organization features
 - Not executed automatically - run manually for guidance
 
 ### Mapper Configuration
 
-**✅ `update_role_mapper.sh <realm-name>`** *(Auto-executed via keycloak_setup_full)*
+**✅ `update_role_mapper.sh <realm-name>`** *(Auto-executed via setup_keycloak_full)*
 - Updates LDAP role mapper configuration and filters
 - Modifies role synchronization patterns and group mappings
 - Useful for adjusting which LDAP groups sync as Keycloak roles
@@ -706,13 +768,13 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 
 ```bash
 # Complete Keycloak setup (recommended - used by start_all_bastion.sh)
-./keycloak/keycloak_setup_full.sh mycompany                    # Interactive mode
-./keycloak/keycloak_setup_full.sh mycompany --defaults         # Automated mode
-./keycloak/keycloak_setup_full.sh mycompany --check-steps      # Step-by-step confirmation
+./keycloak/setup_keycloak_full.sh mycompany                    # Interactive mode
+./keycloak/setup_keycloak_full.sh mycompany --defaults         # Automated mode
+./keycloak/setup_keycloak_full.sh mycompany --check-steps      # Step-by-step confirmation
 
 # Individual component setup (manual/advanced usage)
 ./keycloak/create_realm.sh mycompany
-./keycloak/add_ldap_provider_for_keycloak.sh mycompany
+./keycloak/add_ldap_provider.sh mycompany
 ./keycloak/sync_ldap.sh mycompany
 
 # Organization-specific setup (manual/advanced usage)
@@ -728,16 +790,200 @@ The `keycloak/` directory contains specialized scripts for managing Keycloak con
 
 # Debugging and maintenance
 ./keycloak/debug_realm_ldap.sh mycompany
-./keycloak/keycloak_details.sh
-./keycloak/organization_setup_guide.sh
+./keycloak/show_keycloak_details.sh
+./keycloak/show_organization_guide.sh
 ```
 
 ### Script Organization Summary
 
-- **🤖 Master Script (1):** `keycloak_setup_full.sh` - Complete setup orchestrator called by `start_all_bastion.sh`
+- **🤖 Master Script (1):** `setup_keycloak_full.sh` - Complete setup orchestrator called by `start_all_bastion.sh`
 - **⚙️ Component Scripts (9):** Individual Keycloak configuration components executed by master script
 - **🔧 Manual Tools (2):** Troubleshooting and interactive guidance utilities
 - **📁 Total:** 12 focused, functional scripts with clear modular architecture
+
+### Enhanced Script Features
+
+All Keycloak scripts have been enhanced with powerful features for automation and usability:
+
+#### Help System (`--help` flag)
+Every script now includes comprehensive help documentation:
+
+```bash
+# Get help for any script
+./keycloak/create_realm.sh --help
+./keycloak/setup_keycloak_full.sh --help
+./keycloak/sync_ldap.sh --help
+```
+
+Help documentation includes:
+- Usage syntax and examples
+- Description of purpose
+- Arguments and options
+- Prerequisites
+- Next steps
+- What the script creates
+
+#### Automation Flags
+
+**Idempotency Modes** for CI/CD and automation:
+
+1. **`--force` Flag** - Force recreation of existing resources
+   ```bash
+   # Delete and recreate if exists
+   ./keycloak/create_realm.sh walmart --force
+   ./keycloak/add_ldap_provider.sh walmart --force
+   ```
+
+2. **`--skip` Flag** - Skip if resource already exists
+   ```bash
+   # Skip gracefully if exists
+   ./keycloak/create_realm.sh walmart --skip
+   ./keycloak/add_ldap_provider.sh walmart --skip
+   ```
+
+3. **`--update` Flag** - Update existing configuration
+   ```bash
+   # Update instead of recreating
+   ./keycloak/create_realm.sh walmart --update
+   ```
+
+**Orchestrator Flags:**
+
+The `setup_keycloak_full.sh` orchestrator supports additional flags:
+
+```bash
+# Dry-run mode - preview changes without executing
+./keycloak/setup_keycloak_full.sh walmart --dry-run
+
+# Interactive mode with confirmations
+./keycloak/setup_keycloak_full.sh walmart --check-steps
+
+# Automated mode with defaults
+./keycloak/setup_keycloak_full.sh walmart --defaults
+
+# Force recreation of all resources
+./keycloak/setup_keycloak_full.sh walmart --defaults --force
+
+# Skip existing resources
+./keycloak/setup_keycloak_full.sh walmart --defaults --skip
+```
+
+#### Version Checking
+
+The `check_version.sh` utility verifies Keycloak version and feature availability:
+
+```bash
+# Check Keycloak version
+./keycloak/check_version.sh
+
+# Check Organizations feature support (KC 25+)
+./keycloak/check_version.sh --check-orgs
+
+# Verify minimum version requirement
+./keycloak/check_version.sh --min-version 25
+```
+
+Features checked:
+- ✅ LDAP Integration (all versions)
+- ✅ Role Mappers (all versions)
+- ✅ Client Scopes (all versions)
+- ✅ Organizations (KC 25+)
+- ✅ Fine-Grained Authorization (KC 12+)
+
+#### Quick Reference Guide
+
+The `quick_reference.sh` script provides an interactive command reference:
+
+```bash
+# Show all available commands and common use cases
+./keycloak/quick_reference.sh
+```
+
+Covers 6 common scenarios:
+1. Create minimal realm (no organizations)
+2. Full setup with organizations
+3. Add organizations to existing realm
+4. Add application client
+5. Refresh LDAP after changes
+6. Force recreate LDAP provider
+
+### Integration Architecture
+
+The scripts follow a three-layer architecture:
+
+```
+start_all_bastion.sh (Entry Point)
+    ↓
+start_all_bastion_internal.sh (Container Execution)
+    ↓
+setup_keycloak_full.sh (Orchestrator)
+    ↓
+Individual Scripts (Modular Tasks)
+```
+
+**Flag Flow:**
+1. **Start scripts** pass `--check-steps` or `--defaults` to orchestrator
+2. **Orchestrator** adds `--force` or `--skip` and calls individual scripts
+3. **Individual scripts** execute with full flag support
+
+**Example:**
+```bash
+# User runs this
+./start_all_bastion.sh capgemini --defaults
+
+# Internally calls
+./setup_keycloak_full.sh capgemini --defaults
+
+# Which calls individual scripts with flags
+./create_realm.sh capgemini --force
+./add_ldap_provider.sh capgemini --force
+```
+
+### Automation Patterns
+
+**CI/CD Pipeline:**
+```bash
+# Version check
+./keycloak/check_version.sh --min-version 25 || exit 1
+
+# Dry-run first
+./keycloak/setup_keycloak_full.sh production --dry-run
+
+# Deploy with force mode
+./keycloak/setup_keycloak_full.sh production --defaults --force
+```
+
+**Conditional Setup:**
+```bash
+# Safe re-run - skips existing resources
+./keycloak/create_realm.sh walmart --skip
+./keycloak/add_ldap_provider.sh walmart --skip
+```
+
+**Interactive Learning:**
+```bash
+# Step-by-step with confirmations
+./keycloak/setup_keycloak_full.sh walmart --check-steps
+```
+
+### Flag Support Matrix
+
+| Script | --help | --force | --skip | --update | --dry-run |
+|--------|--------|---------|--------|----------|-----------|
+| `setup_keycloak_full.sh` | ✅ | ✅ | ✅ | ❌ | ✅ |
+| `create_realm.sh` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `add_ldap_provider.sh` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `update_role_mapper.sh` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `sync_ldap.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `setup_organizations.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `configure_shared_clients.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `configure_application_clients.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `configure_mock_oauth2_idp.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `configure_dashboard_client.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `check_version.sh` | ✅ | N/A | N/A | N/A | ❌ |
+| `quick_reference.sh` | ❌ | N/A | N/A | N/A | ❌ |
+
+**Note:** Scripts marked N/A handle idempotency internally or are always safe to re-run.
 
 ## User and Group Management
 

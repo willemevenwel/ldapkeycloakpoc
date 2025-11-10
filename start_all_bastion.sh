@@ -49,6 +49,11 @@ show_help() {
     echo ""
     echo -e "${YELLOW}Troubleshooting:${NC}"
     echo -e "  If tools are missing: ${CYAN}docker-compose build utils${NC}"
+    echo ""
+    echo -e "${YELLOW}Quick Reference Guides:${NC}"
+    echo -e "  • Keycloak: ${CYAN}./keycloak/quick_reference.sh${NC}  ${BLUE}(Keycloak commands & patterns)${NC}"
+    echo -e "  • LDAP: ${CYAN}./ldap/quick_reference.sh${NC}        ${BLUE}(LDAP commands & CSV management)${NC}"
+    echo -e "  • Container: ${CYAN}./python-bastion/quick_reference.sh${NC}  ${BLUE}(Container operations)${NC}"
 }
 
 # Check for help flag first

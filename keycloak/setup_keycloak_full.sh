@@ -23,10 +23,72 @@ fi
 # Keycloak Full Setup Script
 # This script handles all Keycloak configuration tasks extracted from start_all.sh
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Full Setup Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [options]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Orchestrates all Keycloak configuration tasks for a new realm"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name    Name of the realm to create/configure"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help        Show this help message"
+    echo -e "  --check-steps     Prompt for confirmation before each step"
+    echo -e "  --defaults        Use default values for all prompts (automation mode)"
+    echo -e "  --dry-run         Show what would be done without executing"
+    echo -e "  --force           Force recreation of existing resources (passed to individual scripts)"
+    echo -e "  --skip            Skip existing resources without recreation (passed to individual scripts)"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 myrealm"
+    echo -e "  $0 myrealm --defaults"
+    echo -e "  $0 myrealm --check-steps"
+    echo -e "  $0 myrealm --dry-run"
+    echo -e "  $0 myrealm --defaults --force    # Auto-mode with forced recreation"
+    echo -e "  $0 myrealm --defaults --skip     # Auto-mode keeping existing resources"
+    echo ""
+    echo -e "${YELLOW}What this script does:${NC}"
+    echo -e "  1. Check Keycloak server details"
+    echo -e "  2. Create realm with admin user"
+    echo -e "  3. Configure LDAP provider"
+    echo -e "  4. Create role mapper"
+    echo -e "  5. Sync users and roles from LDAP"
+    echo -e "  6. Setup organizations"
+    echo -e "  7. Configure shared clients"
+    echo -e "  8. Configure Mock OAuth2 IdP"
+    echo -e "  9. Setup application clients"
+    echo -e "  10. Configure dashboard client"
+    echo ""
+    echo -e "${YELLOW}Individual Scripts:${NC}"
+    echo -e "  All steps can also be run independently:"
+    echo -e "  - ./create_realm.sh <realm-name>"
+    echo -e "  - ./add_ldap_provider.sh <realm-name>"
+    echo -e "  - ./update_role_mapper.sh <realm-name>"
+    echo -e "  - ./sync_ldap.sh <realm-name>"
+    echo -e "  - ./setup_organizations.sh <realm-name> [orgs...]"
+    echo -e "  - ./configure_shared_clients.sh <realm-name> [orgs...]"
+    echo -e "  - ./configure_application_clients.sh <realm-name> <app> [orgs...]"
+    echo -e "  - ./configure_mock_oauth2_idp.sh <realm-name> [orgs...]"
+    echo -e "  - ./configure_dashboard_client.sh <realm-name>"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
     echo -e "${RED}❌ Error: Realm name is required${NC}"
-    echo -e "${YELLOW}Usage: $0 <realm-name> [--check-steps] [--defaults]${NC}"
+    echo -e "${YELLOW}Usage: $0 <realm-name> [options]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "${YELLOW}  $0 myrealm${NC}"
@@ -38,6 +100,9 @@ fi
 REALM_NAME="$1"
 CHECK_STEPS=false
 USE_DEFAULTS=false
+DRY_RUN=false
+FORCE_MODE=false
+SKIP_MODE=false
 
 # Parse additional arguments
 shift
@@ -51,6 +116,18 @@ while [[ $# -gt 0 ]]; do
             USE_DEFAULTS=true
             shift
             ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --force)
+            FORCE_MODE=true
+            shift
+            ;;
+        --skip)
+            SKIP_MODE=true
+            shift
+            ;;
         *)
             echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
             shift
@@ -59,10 +136,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${GREEN}🔧 Starting complete Keycloak setup for realm: ${MAGENTA}${REALM_NAME}${NC}"
-if [ "$CHECK_STEPS" = true ]; then
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${CYAN}🔍 DRY RUN MODE - No changes will be made${NC}"
+    echo -e "${CYAN}   This will show what commands would be executed${NC}"
+    echo ""
+elif [ "$CHECK_STEPS" = true ]; then
     echo -e "${CYAN}🔍 Check steps mode enabled - you will be prompted for confirmations${NC}"
 elif [ "$USE_DEFAULTS" = true ]; then
     echo -e "${CYAN}🎯 Defaults mode enabled - using default values for all prompts${NC}"
+fi
+
+if [ "$FORCE_MODE" = true ]; then
+    echo -e "${YELLOW}⚡ Force mode enabled - resources will be recreated if they exist${NC}"
+fi
+
+if [ "$SKIP_MODE" = true ]; then
+    echo -e "${YELLOW}⏭️  Skip mode enabled - existing resources will be kept${NC}"
 fi
 
 echo -e "${YELLOW}📋 This will execute the following Keycloak setup steps:${NC}"
@@ -81,6 +170,27 @@ check_success() {
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Previous step failed. Stopping execution.${NC}"
         exit 1
+    fi
+}
+
+# Function to build command flags
+build_flags() {
+    local flags=""
+    if [ "$FORCE_MODE" = true ]; then
+        flags="$flags --force"
+    elif [ "$SKIP_MODE" = true ]; then
+        flags="$flags --skip"
+    fi
+    echo "$flags"
+}
+
+# Function to execute or show command (for dry-run)
+execute_command() {
+    local cmd="$1"
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}   Would execute: ${WHITE}$cmd${NC}"
+    else
+        eval "$cmd"
     fi
 }
 
@@ -106,7 +216,7 @@ confirm_step() {
 # Step 1: Get Keycloak details for debugging
 confirm_step "About to check Keycloak server details and existing realms"
 echo -e "${GREEN}🔄 Step 1: Getting Keycloak server details...${NC}"
-./keycloak_details.sh
+execute_command "./show_keycloak_details.sh"
 check_success
 echo -e "${GREEN}✅ Keycloak details retrieved successfully${NC}"
 echo ""
@@ -114,7 +224,8 @@ echo ""
 # Step 2: Create Keycloak realm
 confirm_step "About to create Keycloak realm '${REALM_NAME}' with admin user and anticipated roles"
 echo -e "${GREEN}🔄 Step 2: Creating Keycloak realm '${REALM_NAME}'...${NC}"
-./create_realm.sh "${REALM_NAME}"
+FLAGS=$(build_flags)
+execute_command "./create_realm.sh \"${REALM_NAME}\" $FLAGS"
 check_success
 echo -e "${GREEN}✅ Realm '${REALM_NAME}' created successfully${NC}"
 echo ""
@@ -122,7 +233,8 @@ echo ""
 # Step 3: Add LDAP provider
 confirm_step "About to create LDAP provider 'ldap-provider-${REALM_NAME}'"
 echo -e "${GREEN}🔄 Step 3: Adding LDAP provider...${NC}"
-./add_ldap_provider_for_keycloak.sh "${REALM_NAME}"
+FLAGS=$(build_flags)
+execute_command "./add_ldap_provider.sh \"${REALM_NAME}\" $FLAGS"
 check_success
 echo -e "${GREEN}✅ LDAP provider added successfully${NC}"
 echo ""
@@ -130,7 +242,8 @@ echo ""
 # Step 4: Create role mapper
 confirm_step "About to create role mapper 'role-mapper-${REALM_NAME}' for LDAP groups"
 echo -e "${GREEN}🔄 Step 4: Creating role mapper for LDAP groups...${NC}"
-./update_role_mapper.sh "${REALM_NAME}"
+FLAGS=$(build_flags)
+execute_command "./update_role_mapper.sh \"${REALM_NAME}\" $FLAGS"
 check_success
 echo -e "${GREEN}✅ Role mapper created successfully${NC}"
 echo ""
@@ -138,7 +251,7 @@ echo ""
 # Step 5: Sync users and roles from LDAP  
 confirm_step "About to sync all users and roles from LDAP to Keycloak"
 echo -e "${GREEN}🔄 Step 5: Syncing users and roles from LDAP...${NC}"
-./sync_ldap.sh "${REALM_NAME}"
+execute_command "./sync_ldap.sh \"${REALM_NAME}\""
 check_success
 echo -e "${GREEN}✅ Users and roles synced successfully${NC}"
 echo ""
@@ -195,7 +308,7 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo ""
     confirm_step "About to setup organizations: ${org_prefixes}"
     echo -e "${GREEN}🔄 Step 6: Setting up organizations...${NC}"
-    ./setup_organizations.sh "${REALM_NAME}" ${org_prefixes}
+    execute_command "./setup_organizations.sh \"${REALM_NAME}\" ${org_prefixes}"
     check_success
     echo -e "${GREEN}✅ Organizations setup completed successfully${NC}"
     
@@ -203,7 +316,7 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo ""
     confirm_step "About to configure shared clients with organization-aware role filtering"
     echo -e "${GREEN}🔄 Step 7: Configuring shared clients...${NC}"
-    ./configure_shared_clients.sh "${REALM_NAME}" ${org_prefixes}
+    execute_command "./configure_shared_clients.sh \"${REALM_NAME}\" ${org_prefixes}"
     check_success
     echo -e "${GREEN}✅ Shared clients configured successfully${NC}"
     
@@ -211,7 +324,7 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo ""
     confirm_step "About to configure Mock OAuth2 Server as Identity Provider for organization testing"
     echo -e "${GREEN}🔄 Step 8: Configuring Mock OAuth2 Identity Provider...${NC}"
-    ./configure_mock_oauth2_idp.sh "${REALM_NAME}" ${org_prefixes}
+    execute_command "./configure_mock_oauth2_idp.sh \"${REALM_NAME}\" ${org_prefixes}"
     check_success
     echo -e "${GREEN}✅ Mock OAuth2 Identity Provider configured successfully${NC}"
     
@@ -251,7 +364,7 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     confirm_step "About to create application clients for: ${app_name} across organizations: ${org_prefixes}"
     echo -e "${GREEN}🔄 Step 9: Configuring application clients...${NC}"
     echo -e "${BLUE}📋 Using provided organization prefixes: ${org_prefixes}${NC}"
-    ./configure_application_clients.sh "${REALM_NAME}" "${app_name}" ${org_prefixes}
+    execute_command "./configure_application_clients.sh \"${REALM_NAME}\" \"${app_name}\" ${org_prefixes}"
     check_success
     echo -e "${GREEN}✅ Application clients configured successfully${NC}"
     echo ""
@@ -280,9 +393,10 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     echo -e "${YELLOW}   The dashboard client enables API access to query realms and clients${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
-    confirm_step "About to create dashboard client for API access in the token viewer"
+    confirm_step "About to create dashboard client in master realm for cross-realm API access"
     echo -e "${GREEN}🔄 Step 10: Configuring dashboard client...${NC}"
-    ./configure_dashboard_client.sh "${REALM_NAME}"
+    echo -e "${YELLOW}   ℹ️  Dashboard client will be created in master realm (required for cross-realm queries)${NC}"
+    execute_command "./configure_dashboard_client.sh"
     check_success
     echo -e "${GREEN}✅ Dashboard client configured successfully${NC}"
     echo ""
@@ -341,7 +455,7 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${CYAN}   • Organization domains: {org}.${REALM_NAME}.local format${NC}"
     echo -e "${CYAN}   • Mock OAuth2 Identity Provider for multi-provider testing${NC}"
     echo -e "${CYAN}   • Organization-specific OAuth2 clients configured${NC}"
-    echo -e "${CYAN}   • View organization setup guide: ./organization_setup_guide.sh${NC}"
+    echo -e "${CYAN}   • View organization setup guide: ./show_organization_guide.sh${NC}"
     echo ""
 fi
 

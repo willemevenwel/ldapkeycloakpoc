@@ -13,17 +13,62 @@ NC='\033[0m' # No Color
 # Creates organization-specific application clients
 # Pattern: {org}-{app}-client (e.g., acme-app-a-client, xyz-app-a-client)
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Application Clients Configuration Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> <app-name> <org-prefix1> [org-prefix2] ..."
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Creates organization-specific application clients"
+    echo -e "  Pattern: {org}-{app}-client (e.g., acme-app-a-client)"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name        Name of the realm to configure"
+    echo -e "  app-name          Name of the application"
+    echo -e "  org-prefix...     One or more organization prefixes"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help        Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 capgemini app-a acme xyz"
+    echo -e "  $0 walmart myservice acme xyz abc"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - Organizations should be configured"
+    echo ""
+    echo -e "${YELLOW}What this creates:${NC}"
+    echo -e "  - One client per organization for the specified application"
+    echo -e "  - Example: acme-app-a-client, xyz-app-a-client"
+    echo -e "  - Each client has unique credentials"
+    echo -e "  - Organization claim for filtering"
+    echo ""
+    echo -e "${YELLOW}Security Model:${NC}"
+    echo -e "  - JWT tokens contain ALL user roles"
+    echo -e "  - Organization claim identifies client context"
+    echo -e "  - Client applications MUST filter roles by org prefix"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if required parameters are provided
 if [ $# -lt 3 ]; then
-    echo "Usage: $0 <realm-name> <app-name> <org-prefix1> [org-prefix2] ..."
+    echo -e "${RED}❌ Error: Missing required arguments${NC}"
     echo ""
-    echo "Examples:"
-    echo "  $0 capgemini app-a acme xyz"
-    echo "  $0 walmart app-b acme xyz abc"
+    echo -e "${YELLOW}Usage: $0 <realm-name> <app-name> <org-prefix1> [org-prefix2] ...${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     echo ""
-    echo "This creates one client per organization for the specified application:"
-    echo "  - acme-app-a-client (for ACME organization's App A access)"
-    echo "  - xyz-app-a-client (for XYZ organization's App A access)"
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 capgemini app-a acme xyz"
+    echo -e "  $0 walmart app-b acme xyz abc"
     exit 1
 fi
 

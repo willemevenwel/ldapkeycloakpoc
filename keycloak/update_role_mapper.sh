@@ -25,14 +25,76 @@ fi
 # Keycloak LDAP Role Mapper Script
 # This script creates or updates a role-ldap-mapper for mapping LDAP groups to Keycloak roles
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak LDAP Role Mapper Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [options]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Creates or updates a role-ldap-mapper for mapping LDAP groups to Keycloak roles"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name    Name of the realm to configure"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help    Show this help message"
+    echo -e "  --force       Replace existing role mapper"
+    echo -e "  --skip        Skip if role mapper already exists"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart"
+    echo -e "  $0 acme --force"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - LDAP provider must be configured (run add_ldap_provider.sh first)"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  ./sync_ldap.sh <realm-name>"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name>"
-    echo "Example: $0 wallmart"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage: $0 <realm-name> [options]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     exit 1
 fi
 
 REALM="$1"
+shift  # Remove realm name from arguments
+
+# Parse options
+FORCE_MODE=false
+SKIP_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force)
+            FORCE_MODE=true
+            shift
+            ;;
+        --skip)
+            SKIP_MODE=true
+            shift
+            ;;
+        *)
+            echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
+            shift
+            ;;
+    esac
+done
+
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
@@ -98,7 +160,7 @@ find_ldap_provider() {
         jq -r '.[] | select(.name=="ldap-provider-'${REALM}'") | .id')
     
     if [ -z "$LDAP_ID" ] || [ "$LDAP_ID" = "null" ]; then
-        echo -e "${RED}❌ ${CYAN}LDAP${NC} provider not found. Make sure to run add_ldap_provider_for_keycloak.sh first${NC}"
+        echo -e "${RED}❌ ${CYAN}LDAP${NC} provider not found. Make sure to run add_ldap_provider.sh first${NC}"
         exit 1
     fi
     

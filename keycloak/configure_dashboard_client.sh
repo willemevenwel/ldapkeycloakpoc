@@ -7,9 +7,62 @@
 # authenticate and query ALL realms. This is required because the dashboard needs
 # to list available realms before the user selects one.
 #
-# Usage: ./configure_dashboard_client.sh
+# Usage: ./configure_dashboard_client.sh <realm-name>
 
 set -e
+
+# Function to show help
+show_help() {
+    echo "Keycloak Dashboard Client Configuration Script"
+    echo ""
+    echo "Usage:"
+    echo "  $0 <realm-name>"
+    echo ""
+    echo "Description:"
+    echo "  Creates a service account client for the dashboard to query Keycloak APIs"
+    echo "  Client is created in the master realm for cross-realm queries"
+    echo ""
+    echo "Arguments:"
+    echo "  realm-name    Name of the realm (used for permissions setup)"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 walmart"
+    echo "  $0 capgemini"
+    echo ""
+    echo "Prerequisites:"
+    echo "  - Keycloak must be running"
+    echo "  - Realm must exist"
+    echo ""
+    echo "What this creates:"
+    echo "  - dashboard-admin-client in master realm"
+    echo "  - Service account with query permissions"
+    echo "  - Cross-realm access to specified realm"
+    echo ""
+    echo "Permissions Granted:"
+    echo "  - view-realm, view-users, view-clients"
+    echo "  - query-realms, query-users, query-clients"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
+# Check if realm name parameter is provided
+if [ $# -eq 0 ]; then
+    echo "❌ Error: Realm name is required"
+    echo ""
+    echo "Usage: $0 <realm-name>"
+    echo "Try: $0 --help for more information"
+    exit 1
+fi
+
+TARGET_REALM="$1"
 
 # Get script directory for network detection
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

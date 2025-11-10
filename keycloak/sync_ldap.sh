@@ -25,10 +25,57 @@ fi
 # Keycloak LDAP Sync Script
 # This script triggers complete synchronization of users and roles from LDAP to Keycloak
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak LDAP Sync Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name>"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Triggers complete synchronization of users and roles from LDAP to Keycloak"
+    echo -e "  This script can be run multiple times to re-sync data"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name    Name of the realm to sync"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help    Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart"
+    echo -e "  $0 acme"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - LDAP provider must be configured"
+    echo -e "  - Role mapper must be configured"
+    echo ""
+    echo -e "${YELLOW}What this script does:${NC}"
+    echo -e "  1. Syncs all users from LDAP"
+    echo -e "  2. Syncs all roles from LDAP groups"
+    echo -e "  3. Lists current roles in the realm"
+    echo ""
+    echo -e "${YELLOW}When to run:${NC}"
+    echo -e "  - After initial setup"
+    echo -e "  - After adding/modifying users in LDAP"
+    echo -e "  - After changing group memberships in LDAP"
+    echo -e "  - Periodically to keep Keycloak in sync"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name>"
-    echo "Example: $0 wallmart"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage: $0 <realm-name>${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     exit 1
 fi
 
@@ -88,7 +135,7 @@ find_ldap_provider() {
         jq -r '.[] | select(.name=="ldap-provider-'${REALM}'") | .id')
     
     if [ -z "$LDAP_ID" ] || [ "$LDAP_ID" = "null" ]; then
-        echo -e "${RED}❌ ${CYAN}LDAP${NC} provider not found. Make sure to run add_ldap_provider_for_keycloak.sh first${NC}"
+        echo -e "${RED}❌ ${CYAN}LDAP${NC} provider not found. Make sure to run add_ldap_provider.sh first${NC}"
         exit 1
     fi
     

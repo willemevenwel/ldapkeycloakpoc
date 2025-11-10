@@ -307,7 +307,7 @@ elif [ "$USE_DEFAULTS" = true ]; then
     KEYCLOAK_ARGS="${KEYCLOAK_ARGS} --defaults"
 fi
 
-./keycloak_setup_full.sh ${KEYCLOAK_ARGS}
+./setup_keycloak_full.sh ${KEYCLOAK_ARGS}
 check_success
 
 # Extract organization status from the keycloak setup
@@ -383,7 +383,7 @@ if [ "$ORGANIZATIONS_CONFIGURED" = true ]; then
     echo -e "${CYAN}   • Organization domains: {org}.${REALM_NAME}.local format${NC}"
     echo -e "${CYAN}   • Mock OAuth2 Identity Provider for multi-provider testing${NC}"
     echo -e "${CYAN}   • Organization-specific OAuth2 clients configured${NC}"
-    echo -e "${CYAN}   • View organization setup guide: ./keycloak/organization_setup_guide.sh${NC}"
+    echo -e "${CYAN}   • View organization setup guide: ./keycloak/show_organization_guide.sh${NC}"
     echo ""
 fi
 

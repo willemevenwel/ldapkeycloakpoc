@@ -13,12 +13,55 @@ NC='\033[0m' # No Color
 # Configure Mock OAuth2 Server as Keycloak Identity Provider
 # This script adds Mock OAuth2 as an external identity provider in Keycloak
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Mock OAuth2 Identity Provider Configuration Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [organization-prefixes...]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Configures Mock OAuth2 Server as an Identity Provider in Keycloak"
+    echo -e "  Creates organization-specific IdP configurations"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name               Name of the realm to configure"
+    echo -e "  organization-prefixes    Space-separated list of organization prefixes"
+    echo -e "                          (default: acme xyz)"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help              Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart acme xyz abc"
+    echo -e "  $0 capgemini acme xyz"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - Organizations should be configured"
+    echo -e "  - Mock OAuth2 server must be running"
+    echo ""
+    echo -e "${YELLOW}What this creates:${NC}"
+    echo -e "  - Organization-specific Identity Providers"
+    echo -e "  - Organization-specific OAuth2 clients in Mock server"
+    echo -e "  - Attribute mappers for organization claims"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name> [organization-prefixes...]"
-    echo "Example: $0 capgemini acme xyz"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
     echo ""
-    echo "If no organization prefixes provided, default prefixes will be used: acme, xyz"
+    echo -e "${YELLOW}Usage: $0 <realm-name> [organization-prefixes...]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
+    echo ""
+    echo -e "${YELLOW}If no organization prefixes provided, default prefixes will be used: acme, xyz${NC}"
     exit 1
 fi
 

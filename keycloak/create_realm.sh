@@ -25,14 +25,84 @@ fi
 # Keycloak Realm Creation Script
 # This script creates a new realm and an admin user for that realm
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Realm Creation Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [options]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Creates a new Keycloak realm with an admin user"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name    Name of the realm to create (e.g., walmart, acme)"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help    Show this help message"
+    echo -e "  --force       Delete and recreate if realm exists (no prompt)"
+    echo -e "  --skip        Skip if realm already exists (no prompt)"
+    echo -e "  --update      Update existing realm configuration"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart"
+    echo -e "  $0 acme --force"
+    echo -e "  $0 mycompany --skip"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Keycloak must be running and accessible"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  echo ""
+    echo -e "  ./add_ldap_provider.sh <realm-name>"
+    echo """
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name>"
-    echo "Example: $0 walmart"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage: $0 <realm-name> [options]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
     exit 1
 fi
 
 REALM_NAME="$1"
+shift  # Remove realm name from arguments
+
+# Parse options
+FORCE_MODE=false
+SKIP_MODE=false
+UPDATE_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force)
+            FORCE_MODE=true
+            shift
+            ;;
+        --skip)
+            SKIP_MODE=true
+            shift
+            ;;
+        --update)
+            UPDATE_MODE=true
+            shift
+            ;;
+        *)
+            echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
+            shift
+            ;;
+    esac
+done
+
 ADMIN_USERNAME="admin-${REALM_NAME}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
 
@@ -82,23 +152,50 @@ check_realm_exists() {
     
     if [ "$HTTP_STATUS" = "200" ]; then
         echo -e "${YELLOW}⚠️  Realm '${REALM_NAME}' already exists${NC}"
-        read -p "Do you want to delete and recreate it? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}🗑️  Deleting existing realm...${NC}"
+        
+        # Handle based on mode
+        if [ "$SKIP_MODE" = true ]; then
+            echo -e "${BLUE}ℹ️  Skip mode enabled - keeping existing realm${NC}"
+            exit 0
+        elif [ "$UPDATE_MODE" = true ]; then
+            echo -e "${BLUE}ℹ️  Update mode enabled - will update existing realm${NC}"
+            REALM_EXISTS=true
+            return
+        elif [ "$FORCE_MODE" = true ]; then
+            echo -e "${YELLOW}🗑️  Force mode enabled - deleting existing realm...${NC}"
             curl -s -X DELETE "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}" \
                 -H "Authorization: Bearer ${MASTER_TOKEN}"
             echo -e "${GREEN}✅ Deleted existing realm${NC}"
+            REALM_EXISTS=false
         else
-            echo -e "${BLUE}ℹ️  Keeping existing realm${NC}"
-            exit 0
+            # Interactive mode - prompt user
+            read -p "Do you want to delete and recreate it? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}🗑️  Deleting existing realm...${NC}"
+                curl -s -X DELETE "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}" \
+                    -H "Authorization: Bearer ${MASTER_TOKEN}"
+                echo -e "${GREEN}✅ Deleted existing realm${NC}"
+                REALM_EXISTS=false
+            else
+                echo -e "${BLUE}ℹ️  Keeping existing realm${NC}"
+                exit 0
+            fi
         fi
+    else
+        REALM_EXISTS=false
     fi
 }
 
 # Function to create realm
 create_realm() {
-    echo -e "${YELLOW}🏗️  Creating realm '${REALM_NAME}'...${NC}"
+    if [ "$REALM_EXISTS" = true ]; then
+        echo -e "${YELLOW}🔄 Updating realm '${REALM_NAME}'...${NC}"
+        UPDATE_REALM=true
+    else
+        echo -e "${YELLOW}🏗️  Creating realm '${REALM_NAME}'...${NC}"
+        UPDATE_REALM=false
+    fi
     
     # Capitalize first letter of realm name for display
     DISPLAY_NAME="$(echo ${REALM_NAME:0:1} | tr 'a-z' 'A-Z')${REALM_NAME:1} Realm"
@@ -124,18 +221,34 @@ create_realm() {
 EOF
 )
 
-    HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms" \
-        -H "Authorization: Bearer ${MASTER_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d "${REALM_CONFIG}" \
-        -o /tmp/realm_response.json)
-    
-    if [ "$HTTP_STATUS" = "201" ]; then
-        echo -e "${GREEN}✅ Created realm '${REALM_NAME}'${NC}"
+    if [ "$UPDATE_REALM" = true ]; then
+        HTTP_STATUS=$(curl -s -w "%{http_code}" -X PUT "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}" \
+            -H "Authorization: Bearer ${MASTER_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${REALM_CONFIG}" \
+            -o /tmp/realm_response.json)
+        
+        if [ "$HTTP_STATUS" = "204" ] || [ "$HTTP_STATUS" = "200" ]; then
+            echo -e "${GREEN}✅ Updated realm '${REALM_NAME}'${NC}"
+        else
+            echo -e "${RED}❌ Failed to update realm (HTTP ${HTTP_STATUS})${NC}"
+            cat /tmp/realm_response.json
+            exit 1
+        fi
     else
-        echo -e "${RED}❌ Failed to create realm (HTTP ${HTTP_STATUS})${NC}"
-        cat /tmp/realm_response.json
-        exit 1
+        HTTP_STATUS=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms" \
+            -H "Authorization: Bearer ${MASTER_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${REALM_CONFIG}" \
+            -o /tmp/realm_response.json)
+        
+        if [ "$HTTP_STATUS" = "201" ]; then
+            echo -e "${GREEN}✅ Created realm '${REALM_NAME}'${NC}"
+        else
+            echo -e "${RED}❌ Failed to create realm (HTTP ${HTTP_STATUS})${NC}"
+            cat /tmp/realm_response.json
+            exit 1
+        fi
     fi
 }
 

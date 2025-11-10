@@ -14,12 +14,58 @@ NC='\033[0m' # No Color
 # Keycloak Organizations Setup Script
 # This script configures organizations in a Keycloak realm for organization-prefixed role management
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Organizations Setup Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [organization-prefixes...]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Configures organizations in a Keycloak realm for organization-prefixed role management"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name               Name of the realm to configure"
+    echo -e "  organization-prefixes    Space-separated list of organization prefixes"
+    echo -e "                          (default: acme xyz)"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help              Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart acme xyz abc"
+    echo -e "  $0 capgemini acme xyz"
+    echo -e "  $0 mycompany             # Uses defaults: acme xyz"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - Keycloak 25+ required for Organizations feature"
+    echo ""
+    echo -e "${YELLOW}What this creates:${NC}"
+    echo -e "  - Organizations with domain format: {org}.{realm}.local"
+    echo -e "  - Example organization roles (admin, developer, user, etc.)"
+    echo -e "  - Test users for each organization"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  ./configure_shared_clients.sh <realm-name> <org-prefixes...>"
+    echo -e "  ./configure_application_clients.sh <realm-name> <app-name> <org-prefixes...>"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name> [organization-prefixes...]"
-    echo "Example: $0 walmart acme xyz abc"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
     echo ""
-    echo "If no organization prefixes provided, default prefixes will be used: acme, xyz"
+    echo -e "${YELLOW}Usage: $0 <realm-name> [organization-prefixes...]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
+    echo ""
+    echo -e "${YELLOW}If no organization prefixes provided, default prefixes will be used: acme, xyz${NC}"
     exit 1
 fi
 

@@ -14,12 +14,56 @@ NC='\033[0m' # No Color
 # Keycloak Shared Clients Configuration Script - SIMPLIFIED VERSION
 # This script creates shared clients with working organization-aware role filtering
 
+# Function to show help
+show_help() {
+    echo -e "${GREEN}Keycloak Shared Clients Configuration Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 <realm-name> [organization-prefixes...]"
+    echo ""
+    echo -e "${YELLOW}Description:${NC}"
+    echo -e "  Creates shared clients (web and API) with organization-aware role filtering"
+    echo ""
+    echo -e "${YELLOW}Arguments:${NC}"
+    echo -e "  realm-name               Name of the realm to configure"
+    echo -e "  organization-prefixes    Space-separated list of organization prefixes"
+    echo -e "                          (default: acme xyz)"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  -h, --help              Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0 walmart acme xyz abc"
+    echo -e "  $0 capgemini acme xyz"
+    echo ""
+    echo -e "${YELLOW}Prerequisites:${NC}"
+    echo -e "  - Realm must exist"
+    echo -e "  - Organizations should be configured (run setup_organizations.sh first)"
+    echo ""
+    echo -e "${YELLOW}What this creates:${NC}"
+    echo -e "  - shared-web-client (for web applications)"
+    echo -e "  - shared-api-client (for API access)"
+    echo -e "  - Protocol mappers with organization flags"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  ./configure_application_clients.sh <realm-name> <app-name> <org-prefixes...>"
+    echo ""
+    exit 0
+}
+
+# Check for help flag first
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
+
 # Check if realm name parameter is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <realm-name> [organization-prefixes...]"
-    echo "Example: $0 walmart acme xyz abc"
+    echo -e "${RED}❌ Error: Realm name is required${NC}"
     echo ""
-    echo "If no organization prefixes provided, default prefixes will be used: acme, xyz"
+    echo -e "${YELLOW}Usage: $0 <realm-name> [organization-prefixes...]${NC}"
+    echo -e "${YELLOW}Try: $0 --help for more information${NC}"
+    echo ""
+    echo -e "${YELLOW}If no organization prefixes provided, default prefixes will be used: acme, xyz${NC}"
     exit 1
 fi
 
