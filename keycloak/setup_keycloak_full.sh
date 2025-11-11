@@ -396,7 +396,7 @@ if [ -z "${setup_organizations}" ] || [ "${setup_organizations}" = "Y" ] || [ "$
     confirm_step "About to create dashboard client in master realm for cross-realm API access"
     echo -e "${GREEN}🔄 Step 10: Configuring dashboard client...${NC}"
     echo -e "${YELLOW}   ℹ️  Dashboard client will be created in master realm (required for cross-realm queries)${NC}"
-    execute_command "./configure_dashboard_client.sh"
+    execute_command "./configure_dashboard_client.sh ${REALM_NAME}"
     check_success
     echo -e "${GREEN}✅ Dashboard client configured successfully${NC}"
     echo ""
