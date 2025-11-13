@@ -20,6 +20,11 @@ else
     exit 1
 fi
 
+# Source HTTP debug logging functions
+if [ -f "${SCRIPT_DIR}/../http_debug.sh" ]; then
+    source "${SCRIPT_DIR}/../http_debug.sh"
+fi
+
 # Keycloak Full Setup Script
 # This script handles all Keycloak configuration tasks extracted from start_all.sh
 
@@ -43,6 +48,7 @@ show_help() {
     echo -e "  --dry-run         Show what would be done without executing"
     echo -e "  --force           Force recreation of existing resources (passed to individual scripts)"
     echo -e "  --skip            Skip existing resources without recreation (passed to individual scripts)"
+    echo -e "  --debug           Enable detailed HTTP transaction logging"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "  $0 myrealm"
@@ -103,6 +109,7 @@ USE_DEFAULTS=false
 DRY_RUN=false
 FORCE_MODE=false
 SKIP_MODE=false
+DEBUG_MODE=false
 
 # Parse additional arguments
 shift
@@ -128,12 +135,21 @@ while [[ $# -gt 0 ]]; do
             SKIP_MODE=true
             shift
             ;;
+        --debug)
+            DEBUG_MODE=true
+            enable_http_debug
+            shift
+            ;;
         *)
             echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
             shift
             ;;
     esac
 done
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${BOLD_PURPLE}🔧 Debug mode enabled - showing detailed HTTP transaction logs${NC}"
+fi
 
 echo -e "${GREEN}🔧 Starting complete Keycloak setup for realm: ${MAGENTA}${REALM_NAME}${NC}"
 if [ "$DRY_RUN" = true ]; then
@@ -180,6 +196,9 @@ build_flags() {
         flags="$flags --force"
     elif [ "$SKIP_MODE" = true ]; then
         flags="$flags --skip"
+    fi
+    if [ "$DEBUG_MODE" = true ]; then
+        flags="$flags --debug"
     fi
     echo "$flags"
 }

@@ -29,6 +29,9 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/network_detect.sh"
 
+# Source HTTP debug logging functions
+source "${SCRIPT_DIR}/http_debug.sh"
+
 # Get appropriate URLs based on execution context
 KEYCLOAK_URL=$(get_keycloak_url)
 
@@ -60,6 +63,10 @@ try_authenticate() {
     if [ -f "data/users.csv" ]; then
         local csv_password=$(grep "^${username}," data/users.csv | cut -d',' -f5 | tr -d '"' | tr -d ' ')
         if [ -n "$csv_password" ] && [ "$csv_password" != "$username" ]; then
+            log_http_request "POST" "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
+                "Content-Type: application/x-www-form-urlencoded" \
+                "grant_type=password&client_id=${client_id}&client_secret=${client_secret}&username=${username}&password=***"
+            
             local token_response=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
                 -d "grant_type=password" \
@@ -67,6 +74,8 @@ try_authenticate() {
                 -d "client_secret=${client_secret}" \
                 -d "username=${username}" \
                 -d "password=${csv_password}")
+            
+            log_http_response "200" "$token_response"
             
             if echo "$token_response" | jq -e '.access_token' > /dev/null 2>&1; then
                 echo "$token_response"
@@ -76,6 +85,10 @@ try_authenticate() {
     fi
     
     # Fallback to username as password
+    log_http_request "POST" "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
+        "Content-Type: application/x-www-form-urlencoded" \
+        "grant_type=password&client_id=${client_id}&client_secret=${client_secret}&username=${username}&password=***"
+    
     local token_response=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=password" \
@@ -84,15 +97,34 @@ try_authenticate() {
         -d "username=${username}" \
         -d "password=${username}")
     
+    log_http_response "200" "$token_response"
+    
     echo "$token_response"
 }
 
 # Parse arguments
 DEFAULTS_MODE=false
+DEBUG_MODE=false
 
-# Check for --defaults flag
-if [ "$1" = "--defaults" ]; then
-    DEFAULTS_MODE=true
+# Check for --defaults flag and --debug flag
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --defaults)
+            DEFAULTS_MODE=true
+            shift
+            ;;
+        --debug)
+            DEBUG_MODE=true
+            enable_http_debug
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [ "$DEFAULTS_MODE" = true ]; then
     REALM_NAME="capgemini"
     APP_NAME="app-a"
     ORG_PREFIX="acme"
@@ -100,12 +132,14 @@ if [ "$1" = "--defaults" ]; then
     echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, app=${APP_NAME}, org=${ORG_PREFIX}, users=[${USERS[*]}]${NC}"
 else
     if [ "$#" -lt 3 ]; then
-        echo -e "${RED}Usage: $0 <realm-name> <app-name> <org-prefix> [user1] [user2] ...${NC}"
-        echo -e "${RED}   or: $0 --defaults${NC}"
+        echo -e "${RED}Usage: $0 <realm-name> <app-name> <org-prefix> [user1] [user2] ... [--debug]${NC}"
+        echo -e "${RED}   or: $0 --defaults [--debug]${NC}"
         echo ""
         echo "Examples:"
         echo "  $0 capgemini app-a acme test-acme-admin test-multi-org"
+        echo "  $0 capgemini app-a acme test-acme-admin --debug"
         echo "  $0 --defaults"
+        echo "  $0 --defaults --debug"
         exit 1
     fi
 
@@ -114,13 +148,31 @@ else
     ORG_PREFIX=$3
     shift 3
     
-    if [ $# -eq 0 ]; then
+    # Parse remaining args for users and flags
+    USERS=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --debug)
+                DEBUG_MODE=true
+                enable_http_debug
+                shift
+                ;;
+            *)
+                USERS+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    if [ ${#USERS[@]} -eq 0 ]; then
         # Default to organization test user if no users specified
         USERS=("test-${ORG_PREFIX}-admin")
         echo -e "${YELLOW}No users specified, defaulting to: ${USERS[*]}${NC}"
-    else
-        USERS=("$@")
     fi
+fi
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${BOLD_PURPLE}🔧 Debug mode enabled - showing detailed HTTP transaction logs${NC}"
 fi
 
 CLIENT_ID="${ORG_PREFIX}-${APP_NAME}-client"

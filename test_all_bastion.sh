@@ -33,6 +33,12 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Source HTTP debug logging functions
+SCRIPT_DIR_INTERNAL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR_INTERNAL}/http_debug.sh" ]; then
+    source "${SCRIPT_DIR_INTERNAL}/http_debug.sh"
+fi
+
 # Parse arguments
 DEBUG_MODE=false
 REALM_NAME=""
@@ -64,6 +70,7 @@ fi
 
 if [ "$DEBUG_MODE" = true ]; then
     echo -e "${CYAN}🔧 Debug mode enabled - showing detailed logs and diagnostics${NC}"
+    enable_http_debug
 fi
 echo ""
 

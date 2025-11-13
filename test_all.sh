@@ -18,6 +18,11 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/network_detect.sh"
 
+# Source HTTP debug logging functions
+if [ -f "${SCRIPT_DIR}/http_debug.sh" ]; then
+    source "${SCRIPT_DIR}/http_debug.sh"
+fi
+
 # Get appropriate URLs based on execution context
 KEYCLOAK_URL=$(get_keycloak_url)
 LDAP_URL=$(get_ldap_url)
@@ -53,6 +58,7 @@ fi
 
 if [ "$DEBUG_MODE" = true ]; then
     echo -e "${CYAN}🔧 Debug mode enabled - showing detailed logs and diagnostics${NC}"
+    enable_http_debug
 fi
 echo ""
 

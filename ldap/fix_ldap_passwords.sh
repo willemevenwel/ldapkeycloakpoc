@@ -10,7 +10,9 @@ echo "Fixing LDAP User Passwords"
 echo "=========================================="
 
 # Read users from CSV and update their passwords
-CSV_FILE="/Users/willemevenwel/Research/ldapkeycloakpoc/data/users.csv"
+# Get script directory for relative path resolution
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CSV_FILE="${SCRIPT_DIR}/../data/users.csv"
 
 if [ ! -f "$CSV_FILE" ]; then
     echo "Error: users.csv not found at $CSV_FILE"

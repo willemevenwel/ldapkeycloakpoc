@@ -29,6 +29,9 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/network_detect.sh"
 
+# Source HTTP debug logging functions
+source "${SCRIPT_DIR}/http_debug.sh"
+
 # Get appropriate URLs based on execution context
 KEYCLOAK_URL=$(get_keycloak_url)
 
@@ -59,14 +62,24 @@ try_authenticate() {
     if [ -f "data/users.csv" ]; then
         local csv_password=$(grep "^${username}," data/users.csv | cut -d',' -f5 | tr -d '"' | tr -d ' ')
         if [ -n "$csv_password" ] && [ "$csv_password" != "$username" ]; then
-            echo -e "🔍 Trying CSV password for $username ($csv_password)" >&2
+            if ! is_http_debug_enabled; then
+                echo -e "🔍 Trying CSV password for $username ($csv_password)" >&2
+            fi
+            
+            log_http_request "POST" "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
+                "Content-Type: application/x-www-form-urlencoded" \
+                "grant_type=password&client_id=shared-web-client&client_secret=${client_secret}&username=${username}&password=***"
+            
             local token_response=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
                 -H "Content-Type: application/x-www-form-urlencoded" \
                 -d "grant_type=password" \
                 -d "client_id=shared-web-client" \
                 -d "client_secret=${client_secret}" \
                 -d "username=${username}" \
-                -d "password=${csv_password}")
+                -d "password=${csv_password}" 2>&1)
+            
+            local exit_code=$?
+            log_http_response "200" "$token_response"
             
             if echo "$token_response" | jq -e '.access_token' > /dev/null 2>&1; then
                 echo "$token_response"
@@ -76,57 +89,92 @@ try_authenticate() {
     fi
     
     # Fallback to username as password
-    echo -e "🔍 Trying username password for $username ($username)" >&2
+    if ! is_http_debug_enabled; then
+        echo -e "🔍 Trying username password for $username ($username)" >&2
+    fi
+    
+    log_http_request "POST" "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
+        "Content-Type: application/x-www-form-urlencoded" \
+        "grant_type=password&client_id=shared-web-client&client_secret=${client_secret}&username=${username}&password=***"
+    
     local token_response=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=password" \
         -d "client_id=shared-web-client" \
         -d "client_secret=${client_secret}" \
         -d "username=${username}" \
-        -d "password=${username}")
+        -d "password=${username}" 2>&1)
+    
+    log_http_response "200" "$token_response"
     
     echo "$token_response"
 }
 
 # Parse arguments
 DEFAULTS_MODE=false
+DEBUG_MODE=false
+REALM_NAME=""
+USERS=()
+
+# Parse all arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --defaults)
+            DEFAULTS_MODE=true
+            shift
+            ;;
+        --debug)
+            DEBUG_MODE=true
+            enable_http_debug
+            shift
+            ;;
+        *)
+            if [ -z "$REALM_NAME" ]; then
+                REALM_NAME="$1"
+            else
+                USERS+=("$1")
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Apply defaults if in defaults mode
+if [ "$DEFAULTS_MODE" = true ]; then
+    if [ -z "$REALM_NAME" ]; then
+        REALM_NAME="capgemini"
+    fi
+    if [ ${#USERS[@]} -eq 0 ]; then
+        USERS=("test-acme-admin" "test-xyz-user" "test-multi-org")
+    fi
+    echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, users=[${USERS[*]}]${NC}"
+fi
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${BOLD_PURPLE}🔧 Debug mode enabled - showing detailed HTTP transaction logs${NC}"
+fi
 
 # Check for --defaults flag (can be first or last argument)
-if [ "$1" = "--defaults" ]; then
-    DEFAULTS_MODE=true
-    REALM_NAME="capgemini"
-    USERS=("test-acme-admin" "test-xyz-user" "test-multi-org")
-    echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, users=[${USERS[*]}]${NC}"
-elif [ "$#" -ge 2 ] && [ "${!#}" = "--defaults" ]; then
-    # --defaults is the last argument
-    DEFAULTS_MODE=true
-    REALM_NAME="$1"
-    # TODO: Normalize realm name to lowercase for consistency (disabled for existing realm)
-    # REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
-    USERS=("test-acme-admin" "test-xyz-user" "test-multi-org")
-    echo -e "${BLUE}🎯 Using defaults: realm=${REALM_NAME}, users=[${USERS[*]}]${NC}"
-elif [ $# -lt 2 ]; then
+if [ -z "$REALM_NAME" ] || [ ${#USERS[@]} -eq 0 ]; then
     echo -e "${RED}❌ Error: Insufficient arguments${NC}"
     echo ""
     echo -e "${YELLOW}Usage:${NC}"
-    echo -e "${YELLOW}  $0 --defaults                           # Use capgemini realm with test-acme-admin, test-xyz-user, test-multi-org${NC}"
-    echo -e "${YELLOW}  $0 <realm-name> --defaults              # Custom realm with default users${NC}"
-    echo -e "${YELLOW}  $0 <realm-name> <user1> [user2] [...]   # Custom realm and users${NC}"
+    echo -e "${YELLOW}  $0 --defaults [--debug]                           # Use capgemini realm with test-acme-admin, test-xyz-user, test-multi-org${NC}"
+    echo -e "${YELLOW}  $0 <realm-name> --defaults [--debug]              # Custom realm with default users${NC}"
+    echo -e "${YELLOW}  $0 <realm-name> <user1> [user2] [...] [--debug]   # Custom realm and users${NC}"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "${YELLOW}  $0 --defaults${NC}"
+    echo -e "${YELLOW}  $0 --defaults --debug${NC}"
     echo -e "${YELLOW}  $0 capgemini --defaults${NC}"
     echo -e "${YELLOW}  $0 capgemini test-acme-admin test-xyz-user${NC}"
-    echo -e "${YELLOW}  $0 capgemini alice bob charlie${NC}"
+    echo -e "${YELLOW}  $0 capgemini alice bob charlie --debug${NC}"
     echo -e "${YELLOW}  $0 walmart alice bob charlie${NC}"
     echo -e "${YELLOW}  $0 mycompany john${NC}"
     exit 1
-else
-    REALM_NAME="$1"
-    # TODO: Normalize realm name to lowercase for consistency (disabled for existing realm)
-    # REALM_NAME=$(echo "$REALM_NAME" | tr '[:upper:]' '[:lower:]')
-    shift  # Remove first argument (realm name)
-    USERS=("$@")  # Remaining arguments are users
+fi
+
+if [ -n "$REALM_NAME" ]; then
     echo -e "${BLUE}🏰 Using realm: ${REALM_NAME}${NC}"
     echo -e "${BLUE}👥 Testing users: [${USERS[*]}]${NC}"
 fi
@@ -137,12 +185,20 @@ fi
 echo "🔑 Getting current client secret..."
 
 # Get admin token for the specified realm
+log_http_request "POST" "${KEYCLOAK_URL}/realms/${REALM_NAME}/protocol/openid-connect/token" \
+    "Content-Type: application/x-www-form-urlencoded" \
+    "username=admin-${REALM_NAME}&password=***&grant_type=password&client_id=admin-cli"
+
 ADMIN_TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM_NAME}/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin-${REALM_NAME}" \
   -d "password=admin-${REALM_NAME}" \
   -d "grant_type=password" \
-  -d "client_id=admin-cli" 2>/dev/null | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+  -d "client_id=admin-cli" 2>/dev/null)
+
+log_http_response "200" "$ADMIN_TOKEN"
+
+ADMIN_TOKEN=$(echo "$ADMIN_TOKEN" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$ADMIN_TOKEN" ]; then
     echo "❌ Failed to get admin token. Is Keycloak running with ${REALM_NAME} realm?"
@@ -150,8 +206,15 @@ if [ -z "$ADMIN_TOKEN" ]; then
 fi
 
 # Get shared-web-client UUID
+log_http_request "GET" "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
+    "Authorization: Bearer ${ADMIN_TOKEN:0:20}..." ""
+
 CLIENT_UUID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}/clients?clientId=shared-web-client" \
-  -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null)
+
+log_http_response "200" "$CLIENT_UUID"
+
+CLIENT_UUID=$(echo "$CLIENT_UUID" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [ -z "$CLIENT_UUID" ]; then
     echo "❌ Failed to find shared-web-client"
@@ -159,8 +222,15 @@ if [ -z "$CLIENT_UUID" ]; then
 fi
 
 # Get client secret
+log_http_request "GET" "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}/clients/${CLIENT_UUID}/client-secret" \
+    "Authorization: Bearer ${ADMIN_TOKEN:0:20}..." ""
+
 CLIENT_SECRET=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM_NAME}/clients/${CLIENT_UUID}/client-secret" \
-  -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null)
+
+log_http_response "200" "$CLIENT_SECRET"
+
+CLIENT_SECRET=$(echo "$CLIENT_SECRET" | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$CLIENT_SECRET" ]; then
     echo "❌ Failed to get client secret"

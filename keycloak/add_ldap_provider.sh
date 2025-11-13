@@ -22,6 +22,11 @@ else
     exit 1
 fi
 
+# Source HTTP debug logging functions
+if [ -f "${SCRIPT_DIR}/../http_debug.sh" ]; then
+    source "${SCRIPT_DIR}/../http_debug.sh"
+fi
+
 # Keycloak LDAP Configuration Script
 # This script configures an LDAP user federation provider in Keycloak
 
@@ -42,6 +47,7 @@ show_help() {
     echo -e "  -h, --help    Show this help message"
     echo -e "  --force       Replace existing LDAP provider"
     echo -e "  --skip        Skip if LDAP provider already exists"
+    echo -e "  --debug       Enable detailed HTTP transaction logging"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "  $0 walmart"
@@ -78,6 +84,7 @@ shift  # Remove realm name from arguments
 # Parse options
 FORCE_MODE=false
 SKIP_MODE=false
+DEBUG_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -89,12 +96,21 @@ while [[ $# -gt 0 ]]; do
             SKIP_MODE=true
             shift
             ;;
+        --debug)
+            DEBUG_MODE=true
+            enable_http_debug
+            shift
+            ;;
         *)
             echo -e "${YELLOW}⚠️  Unknown option: $1${NC}"
             shift
             ;;
     esac
 done
+
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${BOLD_PURPLE}🔧 Debug mode enabled - showing detailed HTTP transaction logs${NC}"
+fi
 
 ADMIN_USERNAME="admin-${REALM}"
 ADMIN_PASSWORD="${ADMIN_USERNAME}"  # Password same as username
@@ -119,6 +135,11 @@ wait_for_keycloak() {
 # Function to get admin token
 get_admin_token() {
     echo -e "${YELLOW}🔑 Getting admin token for '${ADMIN_USERNAME}'...${NC}"
+    
+    log_http_request "POST" "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
+        "Content-Type: application/x-www-form-urlencoded" \
+        "username=${ADMIN_USERNAME}&password=***&grant_type=password&client_id=admin-cli"
+    
     TOKEN_RESPONSE=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "username=${ADMIN_USERNAME}" \
@@ -126,11 +147,17 @@ get_admin_token() {
         -d "grant_type=password" \
         -d "client_id=admin-cli")
     
+    log_http_response "200" "$TOKEN_RESPONSE"
+    
     TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
     
     if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
         echo -e "${YELLOW}⚠️  Failed to get realm admin token, trying master admin...${NC}"
         echo -e "${YELLOW}🔑 Getting master admin token...${NC}"
+        
+        log_http_request "POST" "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+            "Content-Type: application/x-www-form-urlencoded" \
+            "username=admin&password=***&grant_type=password&client_id=admin-cli"
         
         # Try with master realm admin
         TOKEN_RESPONSE=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
@@ -139,6 +166,8 @@ get_admin_token() {
             -d "password=admin" \
             -d "grant_type=password" \
             -d "client_id=admin-cli")
+        
+        log_http_response "200" "$TOKEN_RESPONSE"
         
         TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
         
