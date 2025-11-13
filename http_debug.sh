@@ -45,44 +45,46 @@ log_http_request() {
     local headers="$3"
     local payload="$4"
     
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD_PURPLE}HTTP Transaction${NC}"
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD_PURPLE}Request Details:${NC}"
-    echo -e "${LIGHT_GRAY}  Method:${NC}       ${BOLD_CYAN}${method}${NC}"
-    echo -e "${LIGHT_GRAY}  URL:${NC}          ${BOLD_CYAN}${url}${NC}"
-    
-    if [ -n "$headers" ]; then
-        echo -e "${LIGHT_GRAY}  Headers:${NC}"
-        echo "$headers" | while IFS= read -r header; do
-            if [ -n "$header" ]; then
-                echo -e "${LIGHT_GRAY}    ${header}${NC}"
-            fi
-        done
-    fi
-    
-    if [ -n "$payload" ]; then
-        echo -e "${LIGHT_GRAY}  Payload:${NC}"
-        # Try to pretty-print JSON payload
-        if echo "$payload" | jq . >/dev/null 2>&1; then
-            echo "$payload" | jq . 2>/dev/null | while IFS= read -r line; do
-                echo -e "${LIGHT_GRAY}    ${line}${NC}"
-            done
-        else
-            # If not JSON, try to format as URL-encoded data with password masking
-            echo "$payload" | tr '&' '\n' | while IFS= read -r line; do
-                # Mask password fields
-                if echo "$line" | grep -q "password="; then
-                    line=$(echo "$line" | sed 's/password=.*/password=***/')
+    {
+        echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD_PURPLE}HTTP Transaction${NC}"
+        echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD_PURPLE}Request Details:${NC}"
+        echo -e "${LIGHT_GRAY}  Method:${NC}       ${BOLD_CYAN}${method}${NC}"
+        echo -e "${LIGHT_GRAY}  URL:${NC}          ${BOLD_CYAN}${url}${NC}"
+        
+        if [ -n "$headers" ]; then
+            echo -e "${LIGHT_GRAY}  Headers:${NC}"
+            echo "$headers" | while IFS= read -r header; do
+                if [ -n "$header" ]; then
+                    echo -e "${LIGHT_GRAY}    ${header}${NC}"
                 fi
-                if echo "$line" | grep -q "client_secret="; then
-                    # Don't mask client_secret in payload display, only in logs if needed
-                    :
-                fi
-                echo -e "${LIGHT_GRAY}    ${line}${NC}"
             done
         fi
-    fi
+        
+        if [ -n "$payload" ]; then
+            echo -e "${LIGHT_GRAY}  Payload:${NC}"
+            # Try to pretty-print JSON payload
+            if echo "$payload" | jq . >/dev/null 2>&1; then
+                echo "$payload" | jq . 2>/dev/null | while IFS= read -r line; do
+                    echo -e "${LIGHT_GRAY}    ${line}${NC}"
+                done
+            else
+                # If not JSON, try to format as URL-encoded data with password masking
+                echo "$payload" | tr '&' '\n' | while IFS= read -r line; do
+                    # Mask password fields
+                    if echo "$line" | grep -q "password="; then
+                        line=$(echo "$line" | sed 's/password=.*/password=***/')
+                    fi
+                    if echo "$line" | grep -q "client_secret="; then
+                        # Don't mask client_secret in payload display, only in logs if needed
+                        :
+                    fi
+                    echo -e "${LIGHT_GRAY}    ${line}${NC}"
+                done
+            fi
+        fi
+    } >&2
 }
 
 # Function to log HTTP response
@@ -95,47 +97,49 @@ log_http_response() {
     local status_code="$1"
     local response_body="$2"
     
-    echo ""
-    echo -e "${BOLD_PURPLE}Response:${NC}"
-    
-    # Color the status code based on HTTP status ranges
-    local status_color=""
-    if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ]; then
-        status_color="$LIGHT_GREEN"
-    elif [ "$status_code" -ge 300 ] && [ "$status_code" -lt 400 ]; then
-        status_color="$ORANGE"
-    elif [ "$status_code" -ge 400 ] && [ "$status_code" -lt 600 ]; then
-        status_color="$LIGHT_RED"
-    else
-        status_color="$GRAY"
-    fi
-    
-    echo -e "${LIGHT_GRAY}  Status:${NC}       ${status_color}${status_code}${NC}"
-    
-    if [ -n "$response_body" ] && [ "$response_body" != "null" ] && [ "$response_body" != "" ]; then
-        echo -e "${LIGHT_GRAY}  Body:${NC}"
+    {
+        echo ""
+        echo -e "${BOLD_PURPLE}Response:${NC}"
         
-        # Determine color based on status code success/failure
-        local body_color=""
+        # Color the status code based on HTTP status ranges
+        local status_color=""
         if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ]; then
-            body_color="$LIGHT_GREEN"
+            status_color="$LIGHT_GREEN"
+        elif [ "$status_code" -ge 300 ] && [ "$status_code" -lt 400 ]; then
+            status_color="$ORANGE"
+        elif [ "$status_code" -ge 400 ] && [ "$status_code" -lt 600 ]; then
+            status_color="$LIGHT_RED"
         else
-            body_color="$LIGHT_RED"
+            status_color="$GRAY"
         fi
         
-        # Try to pretty-print JSON response
-        if echo "$response_body" | jq . >/dev/null 2>&1; then
-            echo "$response_body" | jq . 2>/dev/null | while IFS= read -r line; do
-                echo -e "${body_color}    ${line}${NC}"
-            done
-        else
-            # If not JSON, just display as-is with color
-            echo -e "${body_color}    ${response_body}${NC}"
+        echo -e "${LIGHT_GRAY}  Status:${NC}       ${status_color}${status_code}${NC}"
+        
+        if [ -n "$response_body" ] && [ "$response_body" != "null" ] && [ "$response_body" != "" ]; then
+            echo -e "${LIGHT_GRAY}  Body:${NC}"
+            
+            # Determine color based on status code success/failure
+            local body_color=""
+            if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ]; then
+                body_color="$LIGHT_GREEN"
+            else
+                body_color="$LIGHT_RED"
+            fi
+            
+            # Try to pretty-print JSON response
+            if echo "$response_body" | jq . >/dev/null 2>&1; then
+                echo "$response_body" | jq . 2>/dev/null | while IFS= read -r line; do
+                    echo -e "${body_color}    ${line}${NC}"
+                done
+            else
+                # If not JSON, just display as-is with color
+                echo -e "${body_color}    ${response_body}${NC}"
+            fi
         fi
-    fi
-    
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
+        
+        echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+    } >&2
 }
 
 # Wrapper function for curl that automatically logs when debug is enabled
@@ -216,8 +220,10 @@ log_http_call() {
     fi
     
     local description="$1"
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD_PURPLE}HTTP Transaction:${NC} ${LIGHT_GRAY}${description}${NC}"
+    {
+        echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD_PURPLE}HTTP Transaction:${NC} ${LIGHT_GRAY}${description}${NC}"
+    } >&2
 }
 
 log_http_response_simple() {
@@ -228,21 +234,23 @@ log_http_response_simple() {
     local exit_code="$1"
     local response="$2"
     
-    if [ "$exit_code" -eq 0 ]; then
-        echo -e "${LIGHT_GREEN}✓ Success${NC}"
-    else
-        echo -e "${LIGHT_RED}✗ Failed (exit code: ${exit_code})${NC}"
-    fi
-    
-    if [ -n "$response" ]; then
-        echo -e "${LIGHT_GRAY}Response:${NC}"
-        if echo "$response" | jq . >/dev/null 2>&1; then
-            echo "$response" | jq -C . 2>/dev/null | sed 's/^/  /'
+    {
+        if [ "$exit_code" -eq 0 ]; then
+            echo -e "${LIGHT_GREEN}✓ Success${NC}"
         else
-            echo "$response" | sed 's/^/  /'
+            echo -e "${LIGHT_RED}✗ Failed (exit code: ${exit_code})${NC}"
         fi
-    fi
-    
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
+        
+        if [ -n "$response" ]; then
+            echo -e "${LIGHT_GRAY}Response:${NC}"
+            if echo "$response" | jq . >/dev/null 2>&1; then
+                echo "$response" | jq -C . 2>/dev/null | sed 's/^/  /'
+            else
+                echo "$response" | sed 's/^/  /'
+            fi
+        fi
+        
+        echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+    } >&2
 }
