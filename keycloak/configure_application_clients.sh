@@ -196,7 +196,7 @@ create_organization_app_client() {
     "directAccessGrantsEnabled": true,
     "serviceAccountsEnabled": false,
     "protocol": "openid-connect",
-    "fullScopeAllowed": true,
+    "fullScopeAllowed": false,
     "redirectUris": [
         "http://localhost:3000/*",
         "http://localhost:3000/callback",
@@ -269,6 +269,9 @@ EOF
         # Generate and set client secret
         generate_client_secret "$CLIENT_UUID" "$client_id" "$org_prefix"
         
+        # Assign organization-specific realm roles to client scope
+        assign_org_roles_to_client_scope "$CLIENT_UUID" "$client_id" "$org_prefix"
+        
         # Create protocol mappers (includes realm roles + organization/application metadata)
         create_client_protocol_mappers "$CLIENT_UUID" "$client_id" "$org_prefix"
         
@@ -314,6 +317,49 @@ generate_client_secret() {
         CLIENT_SECRETS_VALUES+=("$CLIENT_SECRET")
     else
         echo -e "${RED}❌ Failed to generate secret for ${client_id}${NC}"
+    fi
+}
+
+# Function to assign organization-specific realm roles to client scope
+assign_org_roles_to_client_scope() {
+    local client_uuid=$1
+    local client_id=$2
+    local org_prefix=$3
+    
+    echo -e "${YELLOW}🎯 Assigning ${org_prefix} realm roles to ${client_id} scope...${NC}"
+    
+    # Get all realm roles
+    ROLES_RESPONSE=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${REALM}/roles" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json")
+    
+    # Filter roles that start with org_prefix
+    ORG_ROLES=$(echo "$ROLES_RESPONSE" | jq -r --arg prefix "${org_prefix}_" '[.[] | select(.name | startswith($prefix))]')
+    
+    ROLES_COUNT=$(echo "$ORG_ROLES" | jq 'length')
+    
+    if [ "$ROLES_COUNT" -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  No roles found with prefix '${org_prefix}_'${NC}"
+        return 0
+    fi
+    
+    echo -e "${GREEN}   Found ${ROLES_COUNT} roles with prefix '${org_prefix}_'${NC}"
+    
+    # Assign the filtered roles to the client's scope
+    ASSIGN_RESPONSE=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${client_uuid}/scope-mappings/realm" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${ORG_ROLES}" \
+        -o /tmp/${client_id}_scope_assign.json)
+    
+    if [ "$ASSIGN_RESPONSE" = "204" ] || [ "$ASSIGN_RESPONSE" = "200" ]; then
+        echo -e "${GREEN}✅ Assigned ${ROLES_COUNT} roles to ${client_id} scope${NC}"
+        echo "$ORG_ROLES" | jq -r '.[].name' | while read role_name; do
+            echo -e "      • ${CYAN}${role_name}${NC}"
+        done
+    else
+        echo -e "${YELLOW}⚠️  Issue assigning roles to ${client_id} scope (HTTP $ASSIGN_RESPONSE)${NC}"
+        cat /tmp/${client_id}_scope_assign.json 2>/dev/null
     fi
 }
 
@@ -487,25 +533,25 @@ display_summary() {
     done
     
     echo -e "${GREEN}🔐 Security Model & Design Decision:${NC}"
-    echo -e "   • fullScopeAllowed: ${MAGENTA}true${NC} (All user roles included)"
-    echo -e "   • Role Filtering Approach: ${YELLOW}Client-side via organization claim${NC}"
-    echo -e "   • Rationale: Keycloak's realm role mappers include ALL user roles by design"
-    echo -e "   • Trust Model: Organization claim identifies client's organizational context"
+    echo -e "   • fullScopeAllowed: ${MAGENTA}false${NC} (Only org-specific roles included)"
+    echo -e "   • Role Filtering Approach: ${YELLOW}Server-side via scope mappings${NC}"
+    echo -e "   • Rationale: Each client only receives roles matching its organization prefix"
+    echo -e "   • Trust Model: Keycloak enforces role filtering at token generation time${NC}"
     echo ""
     
     echo -e "${GREEN}🗺️  Protocol Mappers Created:${NC}"
-    echo -e "   • realm_access.roles - ${YELLOW}ALL user realm roles (client must filter)${NC}"
-    echo -e "   • organization - ${GREEN}Org identifier (${ORGANIZATION_PREFIXES[*]})${NC} ${CYAN}← Use this to filter!${NC}"
+    echo -e "   • realm_access.roles - ${GREEN}Only organization-specific roles (server-filtered)${NC}"
+    echo -e "   • organization - ${GREEN}Org identifier (${ORGANIZATION_PREFIXES[*]})${NC}"
     echo -e "   • application - Application name (${APP_NAME})"
     echo -e "   • email - User email address"
     echo -e "   • preferred_username - Username"
     echo ""
     
-    echo -e "${CYAN}📘 How to Use the Organization Claim:${NC}"
-    echo -e "   ${CYAN}1. Extract 'organization' claim from JWT (e.g., \"acme\")${NC}"
-    echo -e "   ${CYAN}2. Filter realm_access.roles to only include roles starting with that prefix${NC}"
-    echo -e "   ${CYAN}3. Example: If organization=\"acme\", only use roles matching \"acme_*\"${NC}"
-    echo -e "   ${CYAN}4. This prevents cross-organization authorization bypass${NC}"
+    echo -e "${CYAN}📘 Role Scope Mapping:${NC}"
+    echo -e "   ${CYAN}• Each client has scope mappings for only its organization's roles${NC}"
+    echo -e "   ${CYAN}• JWT tokens will only contain roles matching the organization prefix${NC}"
+    echo -e "   ${CYAN}• Example: acme-app-a-client only receives acme_* roles${NC}"
+    echo -e "   ${CYAN}• This is enforced at token generation time by Keycloak${NC}"
     echo ""
     
     echo -e "${GREEN}🌐 Keycloak URLs:${NC}"
@@ -546,11 +592,11 @@ display_summary() {
   -d 'client_secret=${first_secret}'${NC}"
     echo ""
     
-    echo -e "${YELLOW}⚠️  Security Consideration:${NC}"
-    echo -e "   ${YELLOW}• JWT tokens contain ALL user roles across all organizations${NC}"
-    echo -e "   ${YELLOW}• Your application MUST filter roles by the organization claim${NC}"
-    echo -e "   ${YELLOW}• Do NOT trust a role unless it matches the organization prefix${NC}"
-    echo -e "   ${YELLOW}• Example: acme-app-a-client should only honor acme_* roles${NC}"
+    echo -e "${GREEN}✅ Security Consideration:${NC}"
+    echo -e "   ${GREEN}• JWT tokens contain ONLY organization-specific roles${NC}"
+    echo -e "   ${GREEN}• Keycloak enforces role filtering via scope mappings${NC}"
+    echo -e "   ${GREEN}• No client-side filtering required - tokens are pre-filtered${NC}"
+    echo -e "   ${GREEN}• Example: acme-app-a-client automatically receives only acme_* roles${NC}"
     echo ""
     
     echo -e "${CYAN}➡️  Next steps:${NC}"
