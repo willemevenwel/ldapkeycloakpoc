@@ -1078,6 +1078,25 @@
             const allRoles = decoded.realm_access?.roles || [];
             const nonOrgRoles = allRoles.filter(role => !orgRoles.includes(role));
             
+            // Extract client-specific roles from resource_access
+            let clientRolesHtml = '';
+            if (decoded.resource_access && Object.keys(decoded.resource_access).length > 0) {
+                clientRolesHtml = Object.entries(decoded.resource_access).map(([clientId, access]) => {
+                    const roles = access.roles || [];
+                    return `
+                        <div style="margin-bottom: 10px;">
+                            <strong style="color: #667eea;">${clientId}:</strong><br>
+                            ${roles.length > 0 ? 
+                                roles.map(role => `<code style="margin: 2px;">${role}</code>`).join(' ') :
+                                '<span style="color: #999;">No roles</span>'
+                            }
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                clientRolesHtml = '<p style="color: #999;">No client-specific roles found</p>';
+            }
+            
             const info = `
                 <div class="info-card">
                     <h4>👤 User Information</h4>
@@ -1096,7 +1115,7 @@
                 </div>
                 
                 <div class="info-card">
-                    <h4>🎭 Roles (Organization-Specific)</h4>
+                    <h4>🎭 Realm Roles (Organization-Specific)</h4>
                     ${orgRoles.length > 0 ? 
                         `<p>${orgRoles.map(role => `<code>${role}</code>`).join(', ')}</p>` :
                         `<p style="color: #e91e63;"><strong>No organization-specific roles found</strong></p>`
@@ -1104,7 +1123,12 @@
                 </div>
                 
                 <div class="info-card">
-                    <h4>⚠️ Other Roles (Should Filter)</h4>
+                    <h4>🎯 Client-Specific Roles</h4>
+                    ${clientRolesHtml}
+                </div>
+                
+                <div class="info-card">
+                    <h4>⚠️ Other Realm Roles (Should Filter)</h4>
                     ${nonOrgRoles.length > 0 ? 
                         `<p style="color: #666;">${nonOrgRoles.map(role => `<code>${role}</code>`).join(', ')}</p>
                          <p style="margin-top: 10px; font-size: 0.9em; color: #999;">These roles are included in the token but may not be relevant to the current organization context.</p>` :

@@ -269,6 +269,9 @@ EOF
         # Generate and set client secret
         generate_client_secret "$CLIENT_UUID" "$client_id" "$org_prefix"
         
+        # Create client roles
+        create_client_roles "$CLIENT_UUID" "$client_id" "$org_prefix"
+        
         # Assign organization-specific realm roles to client scope
         assign_org_roles_to_client_scope "$CLIENT_UUID" "$client_id" "$org_prefix"
         
@@ -317,6 +320,63 @@ generate_client_secret() {
         CLIENT_SECRETS_VALUES+=("$CLIENT_SECRET")
     else
         echo -e "${RED}❌ Failed to generate secret for ${client_id}${NC}"
+    fi
+}
+
+# Function to create client roles
+create_client_roles() {
+    local client_uuid=$1
+    local client_id=$2
+    local org_prefix=$3
+    
+    echo -e "${YELLOW}🎭 Creating client roles for ${client_id}...${NC}"
+    
+    # Create first client role
+    local role1_name="${org_prefix}_client_role_test_1"
+    ROLE1_CONFIG=$(cat <<EOF
+{
+    "name": "${role1_name}",
+    "description": "Test client role 1 for ${org_prefix} organization"
+}
+EOF
+)
+    
+    HTTP_STATUS1=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${client_uuid}/roles" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${ROLE1_CONFIG}" \
+        -o /tmp/${client_id}_role1.json)
+    
+    if [ "$HTTP_STATUS1" = "201" ]; then
+        echo -e "${GREEN}   ✅ Created client role: ${role1_name}${NC}"
+    elif [ "$HTTP_STATUS1" = "409" ]; then
+        echo -e "${YELLOW}   ⚠️  Client role '${role1_name}' already exists${NC}"
+    else
+        echo -e "${RED}   ❌ Failed to create client role '${role1_name}' (HTTP $HTTP_STATUS1)${NC}"
+    fi
+    
+    # Create second client role
+    local role2_name="${org_prefix}_client_role_test_2"
+    ROLE2_CONFIG=$(cat <<EOF
+{
+    "name": "${role2_name}",
+    "description": "Test client role 2 for ${org_prefix} organization"
+}
+EOF
+)
+    
+    HTTP_STATUS2=$(curl -s -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${client_uuid}/roles" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${ROLE2_CONFIG}" \
+        -o /tmp/${client_id}_role2.json)
+    
+    if [ "$HTTP_STATUS2" = "201" ]; then
+        echo -e "${GREEN}   ✅ Created client role: ${role2_name}${NC}"
+    elif [ "$HTTP_STATUS2" = "409" ]; then
+        echo -e "${YELLOW}   ⚠️  Client role '${role2_name}' already exists${NC}"
+    else
+        echo -e "${RED}   ❌ Failed to create client role '${role2_name}' (HTTP $HTTP_STATUS2)${NC}"
     fi
 }
 
@@ -537,6 +597,13 @@ display_summary() {
     echo -e "   • Role Filtering Approach: ${YELLOW}Server-side via scope mappings${NC}"
     echo -e "   • Rationale: Each client only receives roles matching its organization prefix"
     echo -e "   • Trust Model: Keycloak enforces role filtering at token generation time${NC}"
+    echo ""
+    
+    echo -e "${GREEN}🎭 Client Roles Created:${NC}"
+    for org_prefix in "${ORGANIZATION_PREFIXES[@]}"; do
+        echo -e "   • ${CYAN}${org_prefix}_client_role_test_1${NC}"
+        echo -e "   • ${CYAN}${org_prefix}_client_role_test_2${NC}"
+    done
     echo ""
     
     echo -e "${GREEN}🗺️  Protocol Mappers Created:${NC}"
